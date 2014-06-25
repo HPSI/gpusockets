@@ -1,0 +1,12 @@
+message Cmd {
+	required uint32 type=1;
+	required uint32 arg_count=2;
+	repeated int32 int_args=3;
+	repeated string str_args=4;
+	optional bytes extra_args=5;
+}
+
+message Cookie {
+	required uint32 type=1;
+	required Cmd payload=2;
+}

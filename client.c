@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 	uint32_t msg_length, msg_len_n;
 	in_port_t server_port;
 	struct sockaddr_in server_addr;
-    char *server_ip, *a = "Hello", *b = "world";
+	char *server_ip, *a = "Hello", *b = "world";
 	Cookie message = COOKIE__INIT;
 	Cmd cmd = CMD__INIT;
 	void *buffer, *msg_buffer; 
@@ -83,20 +83,22 @@ int main(int argc, char *argv[]) {
 	cmd.arg_count = 4;
 	cmd.n_int_args = 2;
 	cmd.int_args = malloc(sizeof(int) * cmd.n_int_args);
+	if (cmd.int_args == NULL) {
+		perror("cmd.int_args allocation failed");
+		exit(EXIT_FAILURE);
+	}
 	cmd.int_args[0] = client_sock_fd;
 	cmd.int_args[1] = 2;
 	cmd.n_str_args = 2;
 	cmd.str_args = malloc(sizeof(char *) * cmd.n_str_args);
+	if (cmd.str_args == NULL) {
+		perror("cmd.str_args allocation failed");
+		exit(EXIT_FAILURE);
+	}
 	cmd.str_args[0] = a;
 	cmd.str_args[1] = b;
 	
-	message.payload = &cmd;
-
-/*
-	cmd->data = malloc(strlen(a) + strlen(b) + 2);
-	memcpy(cmd->data, a, strlen(a)+1);
-	memcpy(cmd->data+strlen(a)+1, b, strlen(b)+1);
-*/
+	message.payload = &cmd;	
 	msg_length = cookie__get_packed_size(&message);
 	msg_buffer = malloc(msg_length);
 	if (msg_buffer == NULL) {
@@ -120,6 +122,7 @@ int main(int argc, char *argv[]) {
 
 	printf("Message sent succesfully\n");
 	free(cmd.int_args);
+	free(cmd.str_args);
 	free(buffer);
 	free(msg_buffer);
 	close(client_sock_fd);

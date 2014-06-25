@@ -77,12 +77,6 @@ void decode_message(Cookie *msg) {
 						printf ("--str: %s\n", cmd->str_args[i]);
 					}
 
-/*
-					a = malloc(sizeof("Hello"));
-					b = malloc(sizeof("World"));
-					memcpy(a, cmd->data, strlen(a)+1);
-					memcpy(b, cmd->data+strlen(a)+1, strlen(b)+1);
-					printf("--a: %s\n --b: %s\n", a, b);*/
 					break;
 			}
 			
