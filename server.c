@@ -7,10 +7,11 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include "common.h"
-#include "common.pb-c.h"
-#define MAX_MSG_SIZE 2048
+#include "common.pb-c.h" 
+#include "protocol.h"
+#include "process.h"
 
-int init_server(in_port_t port, struct sockaddr_in *addr) {
+int init_server_net(in_port_t port, struct sockaddr_in *addr) {
 	int socket_fd;
 
 	bzero(addr, sizeof(*addr));
@@ -38,70 +39,40 @@ int init_server(in_port_t port, struct sockaddr_in *addr) {
 	return socket_fd;
 }
 
-ssize_t read_socket(int fd, void *buffer, size_t bytes) {
-	ssize_t	b_read, b_total = 0;
+int init_server(in_port_t port, struct sockaddr_in *addr, void **free_list, void **busy_list) {
+	int socket_fd;
 
-	do {
-		b_read = read(fd, buffer+b_total, bytes-b_total);
-		if (b_read < 0) {
-			perror("read socket failed");
-			exit(EXIT_FAILURE);
-		}
-		b_total += b_read;
-	} while (b_total < bytes);
-	
-	printf("Bytes received: %zd\n", b_total);
-	return b_total;
-}
+	printf("Initializing server...\n");
+	socket_fd = init_server_net(port, addr);
+	discover_cuda_devices(free_list, busy_list);
 
-void decode_message(Cookie *msg) {
-	int i;
-	Cmd *cmd;
-
-	printf("Decoding message data...\n");
-	switch (msg->type) {
-		case CUDA_CMD:
-			printf("--------------\nIs cuda cmd\n");
-							
-			cmd = msg->payload;
-			printf("Decoding cmd data...\n");
-
-			switch (cmd->type) {
-				case TEST:
-					printf("-Type: TEST\n");
-					printf("-Arguments: %u\n", cmd->arg_count);
-					for (i = 0; i < cmd->n_int_args; i++) { 
-						printf ("--int: %d\n", cmd->int_args[i]);
-					}
-					for (i = 0; i < cmd->n_str_args; i++) { 
-						printf ("--str: %s\n", cmd->str_args[i]);
-					}
-
-					break;
-			}
-			
-			break;
-	}
+	return socket_fd;
 }
 
 int main(int argc, char *argv[]) {
-	int server_sock_fd, client_sock_fd;
+	int server_sock_fd, client_sock_fd, msg_type, cuda_dev_arr_size, resp_type;
 	in_port_t local_port;
 	struct sockaddr_in local_addr, client_addr;
 	socklen_t s;
-    char client_ip[INET_ADDRSTRLEN], *a, *b;
-	Cookie *message;
-	void *buffer;
+    char client_ip[INET_ADDRSTRLEN];
+	void *msg=NULL, *payload, *result=NULL, *cuda_dev_array=NULL, *free_list=NULL, *busy_list=NULL;
 	uint32_t msg_length;
 
-	if (argc != 2) {
+	if (argc > 2) {
 		printf("Usage: server <local_port>\n");
 		exit(EXIT_FAILURE);
 	}
-	local_port = atoi(argv[1]);
 	
-	server_sock_fd = init_server(local_port, &local_addr);	
-	printf("Server listening on port %d for incoming connections...\n", local_port);
+	if (argc == 1) {
+		printf("No port defined, using default %d\n", DEFAULT_PORT);
+		local_port = atoi(DEFAULT_PORT);
+	} else {
+		local_port = atoi(argv[1]);
+	}
+	
+	server_sock_fd = init_server(local_port, &local_addr, &free_list, &busy_list);
+	print_cuda_devices(free_list, busy_list);
+	printf("\nServer listening on port %d for incoming connections...\n", local_port);
 
 	for (;;) {
 		s = sizeof(client_addr);
@@ -117,35 +88,52 @@ int main(int argc, char *argv[]) {
 		else
 			printf("from client %s\n", client_ip);
 
-		buffer = malloc(sizeof(uint32_t));
-		if (buffer == NULL) {
-			perror("buffer memory allocation failed");
-			exit(EXIT_FAILURE);
+		msg_length = receive_message(&msg, client_sock_fd);
+		if (msg_length > 0)
+			msg_type = decode_message(&payload, msg, msg_length);
+			
+		if (msg != NULL) {
+			free(msg);
+			msg = NULL;
 		}
-		// read message length
-		read_socket(client_sock_fd, buffer, sizeof(uint32_t));
-
-		msg_length = ntohl(*(uint32_t *)buffer);
-		printf("Going to read a message of %u bytes...\n", msg_length);
 		
-		buffer = realloc(buffer, msg_length);
-		if (buffer == NULL) {	
-			perror("buffer memory reallocation failed");
-			exit(1);
+		//CudaDeviceList *sth;, *cuda_dev_array=NULL;
+		printf("Processing message\n");
+		switch (msg_type) {
+			case CUDA_CMD:
+				process_cuda_cmd(&result, payload);
+				resp_type = CUDA_CMD_RESULT;
+				break;
+			case CUDA_DEVICE_QUERY:
+				process_cuda_device_query(&result, &cuda_dev_array, &cuda_dev_arr_size);
+				resp_type = CUDA_DEVICE_LIST;
+				// -- remove this...
+				CudaDeviceList *devs;
+				devs = result;
+				printf("Test result: %s\n",  devs->device[0]->name);
+				cuda_device__get_packed_size(devs->device[0]);
+				// -- /
+				break;
 		}
-		// read message
-		read_socket(client_sock_fd, buffer, msg_length);
-		
-		message = cookie__unpack(NULL, msg_length, (uint8_t *)buffer);
-		if (message == NULL) {
-			fprintf(stderr, "message unpacking failed\n");
-			continue;
+			
+		if (result != NULL) {
+			printf("Sending result\n");
+			msg_length = encode_message(&msg, resp_type, result);
+			send_message(client_sock_fd, msg, msg_length);
+			
+			if (result != cuda_dev_array)
+				free(result);
+			
+			result = NULL;
 		}
-		free(buffer);
-		
-		decode_message(message);
 		printf("--------------\nMessage processed, cleaning up...\n");
-		cookie__free_unpacked(message, NULL);
+		if (msg != NULL) {
+			free(msg);
+			msg = NULL;
+		}
+		sleep(2); // just for testing...
 		close(client_sock_fd);
 	}
+
+	return EXIT_FAILURE;
 }

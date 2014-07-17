@@ -2,52 +2,138 @@
 /* Generated from: common.proto */
 
 /* Do not generate deprecated warnings for self */
-#ifndef PROTOBUF_C_NO_DEPRECATED
-#define PROTOBUF_C_NO_DEPRECATED
+#ifndef PROTOBUF_C__NO_DEPRECATED
+#define PROTOBUF_C__NO_DEPRECATED
 #endif
 
 #include "common.pb-c.h"
-void   cmd__init
-                     (Cmd         *message)
+void   cuda_cmd__init
+                     (CudaCmd         *message)
 {
-  static Cmd init_value = CMD__INIT;
+  static CudaCmd init_value = CUDA_CMD__INIT;
   *message = init_value;
 }
-size_t cmd__get_packed_size
-                     (const Cmd *message)
+size_t cuda_cmd__get_packed_size
+                     (const CudaCmd *message)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cmd__descriptor);
+  assert(message->base.descriptor == &cuda_cmd__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t cmd__pack
-                     (const Cmd *message,
+size_t cuda_cmd__pack
+                     (const CudaCmd *message,
                       uint8_t       *out)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cmd__descriptor);
+  assert(message->base.descriptor == &cuda_cmd__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t cmd__pack_to_buffer
-                     (const Cmd *message,
+size_t cuda_cmd__pack_to_buffer
+                     (const CudaCmd *message,
                       ProtobufCBuffer *buffer)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cmd__descriptor);
+  assert(message->base.descriptor == &cuda_cmd__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Cmd *
-       cmd__unpack
+CudaCmd *
+       cuda_cmd__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Cmd *)
-     protobuf_c_message_unpack (&cmd__descriptor,
+  return (CudaCmd *)
+     protobuf_c_message_unpack (&cuda_cmd__descriptor,
                                 allocator, len, data);
 }
-void   cmd__free_unpacked
-                     (Cmd *message,
+void   cuda_cmd__free_unpacked
+                     (CudaCmd *message,
                       ProtobufCAllocator *allocator)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cmd__descriptor);
+  assert(message->base.descriptor == &cuda_cmd__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   cuda_device__init
+                     (CudaDevice         *message)
+{
+  static CudaDevice init_value = CUDA_DEVICE__INIT;
+  *message = init_value;
+}
+size_t cuda_device__get_packed_size
+                     (const CudaDevice *message)
+{
+  assert(message->base.descriptor == &cuda_device__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t cuda_device__pack
+                     (const CudaDevice *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &cuda_device__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t cuda_device__pack_to_buffer
+                     (const CudaDevice *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &cuda_device__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+CudaDevice *
+       cuda_device__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (CudaDevice *)
+     protobuf_c_message_unpack (&cuda_device__descriptor,
+                                allocator, len, data);
+}
+void   cuda_device__free_unpacked
+                     (CudaDevice *message,
+                      ProtobufCAllocator *allocator)
+{
+  assert(message->base.descriptor == &cuda_device__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   cuda_device_list__init
+                     (CudaDeviceList         *message)
+{
+  static CudaDeviceList init_value = CUDA_DEVICE_LIST__INIT;
+  *message = init_value;
+}
+size_t cuda_device_list__get_packed_size
+                     (const CudaDeviceList *message)
+{
+  assert(message->base.descriptor == &cuda_device_list__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t cuda_device_list__pack
+                     (const CudaDeviceList *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &cuda_device_list__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t cuda_device_list__pack_to_buffer
+                     (const CudaDeviceList *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &cuda_device_list__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+CudaDeviceList *
+       cuda_device_list__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (CudaDeviceList *)
+     protobuf_c_message_unpack (&cuda_device_list__descriptor,
+                                allocator, len, data);
+}
+void   cuda_device_list__free_unpacked
+                     (CudaDeviceList *message,
+                      ProtobufCAllocator *allocator)
+{
+  assert(message->base.descriptor == &cuda_device_list__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   cookie__init
@@ -59,21 +145,21 @@ void   cookie__init
 size_t cookie__get_packed_size
                      (const Cookie *message)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cookie__descriptor);
+  assert(message->base.descriptor == &cookie__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
 size_t cookie__pack
                      (const Cookie *message,
                       uint8_t       *out)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cookie__descriptor);
+  assert(message->base.descriptor == &cookie__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
 size_t cookie__pack_to_buffer
                      (const Cookie *message,
                       ProtobufCBuffer *buffer)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cookie__descriptor);
+  assert(message->base.descriptor == &cookie__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
 Cookie *
@@ -90,10 +176,10 @@ void   cookie__free_unpacked
                      (Cookie *message,
                       ProtobufCAllocator *allocator)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &cookie__descriptor);
+  assert(message->base.descriptor == &cookie__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
+static const ProtobufCFieldDescriptor cuda_cmd__field_descriptors[6] =
 {
   {
     "type",
@@ -101,7 +187,7 @@ static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Cmd, type),
+    offsetof(CudaCmd, type),
     NULL,
     NULL,
     0,             /* flags */
@@ -113,7 +199,7 @@ static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Cmd, arg_count),
+    offsetof(CudaCmd, arg_count),
     NULL,
     NULL,
     0,             /* flags */
@@ -124,8 +210,20 @@ static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
     3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_INT32,
-    PROTOBUF_C_OFFSETOF(Cmd, n_int_args),
-    PROTOBUF_C_OFFSETOF(Cmd, int_args),
+    offsetof(CudaCmd, n_int_args),
+    offsetof(CudaCmd, int_args),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "uint_args",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(CudaCmd, n_uint_args),
+    offsetof(CudaCmd, uint_args),
     NULL,
     NULL,
     0,             /* flags */
@@ -133,11 +231,11 @@ static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
   },
   {
     "str_args",
-    4,
+    5,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    PROTOBUF_C_OFFSETOF(Cmd, n_str_args),
-    PROTOBUF_C_OFFSETOF(Cmd, str_args),
+    offsetof(CudaCmd, n_str_args),
+    offsetof(CudaCmd, str_args),
     NULL,
     NULL,
     0,             /* flags */
@@ -145,45 +243,149 @@ static const ProtobufCFieldDescriptor cmd__field_descriptors[5] =
   },
   {
     "extra_args",
-    5,
+    6,
     PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_BYTES,
-    PROTOBUF_C_OFFSETOF(Cmd, has_extra_args),
-    PROTOBUF_C_OFFSETOF(Cmd, extra_args),
+    offsetof(CudaCmd, has_extra_args),
+    offsetof(CudaCmd, extra_args),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned cmd__field_indices_by_name[] = {
+static const unsigned cuda_cmd__field_indices_by_name[] = {
   1,   /* field[1] = arg_count */
-  4,   /* field[4] = extra_args */
+  5,   /* field[5] = extra_args */
   2,   /* field[2] = int_args */
-  3,   /* field[3] = str_args */
+  4,   /* field[4] = str_args */
   0,   /* field[0] = type */
+  3,   /* field[3] = uint_args */
 };
-static const ProtobufCIntRange cmd__number_ranges[1 + 1] =
+static const ProtobufCIntRange cuda_cmd__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
-const ProtobufCMessageDescriptor cmd__descriptor =
+const ProtobufCMessageDescriptor cuda_cmd__descriptor =
 {
-  PROTOBUF_C_MESSAGE_DESCRIPTOR_MAGIC,
-  "Cmd",
-  "Cmd",
-  "Cmd",
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CudaCmd",
+  "CudaCmd",
+  "CudaCmd",
   "",
-  sizeof(Cmd),
-  5,
-  cmd__field_descriptors,
-  cmd__field_indices_by_name,
-  1,  cmd__number_ranges,
-  (ProtobufCMessageInit) cmd__init,
+  sizeof(CudaCmd),
+  6,
+  cuda_cmd__field_descriptors,
+  cuda_cmd__field_indices_by_name,
+  1,  cuda_cmd__number_ranges,
+  (ProtobufCMessageInit) cuda_cmd__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor cookie__field_descriptors[2] =
+static const protobuf_c_boolean cuda_device__is_busy__default_value = 0;
+static const ProtobufCFieldDescriptor cuda_device__field_descriptors[2] =
+{
+  {
+    "name",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(CudaDevice, name),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "is_busy",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(CudaDevice, is_busy),
+    NULL,
+    &cuda_device__is_busy__default_value,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned cuda_device__field_indices_by_name[] = {
+  1,   /* field[1] = is_busy */
+  0,   /* field[0] = name */
+};
+static const ProtobufCIntRange cuda_device__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor cuda_device__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CudaDevice",
+  "CudaDevice",
+  "CudaDevice",
+  "",
+  sizeof(CudaDevice),
+  2,
+  cuda_device__field_descriptors,
+  cuda_device__field_indices_by_name,
+  1,  cuda_device__number_ranges,
+  (ProtobufCMessageInit) cuda_device__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor cuda_device_list__field_descriptors[2] =
+{
+  {
+    "devices_free",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(CudaDeviceList, devices_free),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "device",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(CudaDeviceList, n_device),
+    offsetof(CudaDeviceList, device),
+    &cuda_device__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned cuda_device_list__field_indices_by_name[] = {
+  1,   /* field[1] = device */
+  0,   /* field[0] = devices_free */
+};
+static const ProtobufCIntRange cuda_device_list__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor cuda_device_list__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CudaDeviceList",
+  "CudaDeviceList",
+  "CudaDeviceList",
+  "",
+  sizeof(CudaDeviceList),
+  2,
+  cuda_device_list__field_descriptors,
+  cuda_device_list__field_indices_by_name,
+  1,  cuda_device_list__number_ranges,
+  (ProtobufCMessageInit) cuda_device_list__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor cookie__field_descriptors[4] =
 {
   {
     "type",
@@ -191,43 +393,69 @@ static const ProtobufCFieldDescriptor cookie__field_descriptors[2] =
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Cookie, type),
+    offsetof(Cookie, type),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "payload",
+    "cuda_error",
     2,
-    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Cookie, has_cuda_error),
+    offsetof(Cookie, cuda_error),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cuda_cmd",
+    3,
+    PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Cookie, payload),
-    &cmd__descriptor,
+    offsetof(Cookie, cuda_cmd),
+    &cuda_cmd__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cuda_devices",
+    4,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Cookie, cuda_devices),
+    &cuda_device_list__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned cookie__field_indices_by_name[] = {
-  1,   /* field[1] = payload */
+  2,   /* field[2] = cuda_cmd */
+  3,   /* field[3] = cuda_devices */
+  1,   /* field[1] = cuda_error */
   0,   /* field[0] = type */
 };
 static const ProtobufCIntRange cookie__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor cookie__descriptor =
 {
-  PROTOBUF_C_MESSAGE_DESCRIPTOR_MAGIC,
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
   "Cookie",
   "Cookie",
   "Cookie",
   "",
   sizeof(Cookie),
-  2,
+  4,
   cookie__field_descriptors,
   cookie__field_indices_by_name,
   1,  cookie__number_ranges,

@@ -1,12 +1,25 @@
-message Cmd {
-	required uint32 type=1;
-	required uint32 arg_count=2;
-	repeated int32 int_args=3;
-	repeated string str_args=4;
-	optional bytes extra_args=5;
+message CudaCmd {
+	required uint32 type = 1;
+	required uint32 arg_count = 2;
+	repeated int32 int_args = 3;
+	repeated uint32 uint_args = 4;
+	repeated string str_args = 5;
+	optional bytes extra_args = 6;
+}
+
+message CudaDevice {
+	required string name = 1;
+	required bool is_busy = 2 [default = false];
+}
+
+message CudaDeviceList {
+	required uint32 devices_free = 1;
+	repeated CudaDevice device = 2;
 }
 
 message Cookie {
-	required uint32 type=1;
-	required Cmd payload=2;
+	required uint32 type = 1;
+	optional uint32 cuda_error = 2;
+	optional CudaCmd cuda_cmd = 3;
+	optional CudaDeviceList cuda_devices = 4;
 }
