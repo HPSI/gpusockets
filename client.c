@@ -12,47 +12,31 @@
 #include "common.pb-c.h"
 #include "protocol.h"
 
-int init_client(char *server_ip, char *port, struct sockaddr_in *addr) {
+int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
-	struct addrinfo *result, *rp;
 
-	bzero(addr, sizeof(*addr));
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_INET;    /* Allow IPv4 or IPv6 */
-	hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
-	hints.ai_flags = 0;    /* For wildcard IP address */
-	hints.ai_protocol = IPPROTO_TCP;          /* Any protocol */
+	bzero(&hints, sizeof(hints));
+	hints.ai_family = AF_INET;	// Allow IPv4
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = 0;	// For wildcard IP address
+	hints.ai_protocol = IPPROTO_TCP;
 	hints.ai_canonname = NULL;
 	hints.ai_addr = NULL;
 	hints.ai_next = NULL;
 
-	ret = getaddrinfo(server_ip, port, &hints, &result);
+	ret = getaddrinfo(s_ip, s_port, &hints, &s_addr);
 	if (ret) {
-		fprintf(stderr, "Error in getaddrinfo:%d : \n", ret, gai_strerror(ret));
-		exit(ret);
+		fprintf(stderr, "getaddrinfo failed: [%d] %s\n", ret, gai_strerror(ret));
+		exit(EXIT_FAILURE);
 	}
-	socket_fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	socket_fd = socket(s_addr->ai_family, s_addr->ai_socktype, s_addr->ai_protocol);
 	if (socket_fd < 0) {
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
 
-#if 0
-	//addr->sin_family = AF_INET; // IPv4 addresses
-	//addr->sin_port = htons(port);
-
-	ret = inet_pton(AF_INET, server_ip, &addr->sin_addr);
-	if (ret == 0) {
-		perror("inet_pton failed: Invalid IP address string");
-		exit(EXIT_FAILURE);
-	} else if (ret < 0) {
-		perror("inet_pton failed");
-		exit(EXIT_FAILURE);
-	}
-#endif
-
-	if (connect(socket_fd, (struct sockaddr*)result->ai_addr, result->ai_addrlen) < 0) {
+	if (connect(socket_fd, (struct sockaddr*)s_addr->ai_addr, s_addr->ai_addrlen) < 0) {
 		perror("connect failed");
 		exit(EXIT_FAILURE);
 	}
@@ -99,7 +83,7 @@ int main(int argc, char *argv[]) {
 	int client_sock_fd;
 	size_t buf_size;
 	char *server_port;
-	struct sockaddr_in server_addr;
+	struct addrinfo server_addr;
 	char *server_ip, *a = "Hello", *b = "world";
 	CudaCmd cmd = CUDA_CMD__INIT;
 	void *buffer=NULL; 
@@ -110,7 +94,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (argc == 2) {
-		printf("No port defined, using default %d\n", DEFAULT_PORT);
+		printf("No port defined, using default %s\n", DEFAULT_PORT);
 		server_port = (char *)DEFAULT_PORT;
 	} else {
 		server_port = argv[2];

@@ -6,27 +6,39 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <netdb.h>
+
 #include "common.h"
 #include "common.pb-c.h" 
 #include "protocol.h"
 #include "process.h"
 
-int init_server_net(in_port_t port, struct sockaddr_in *addr) {
-	int socket_fd;
+int init_server_net(char * port, struct addrinfo *addr) {
+	int socket_fd, ret;
+	struct addrinfo hints;
 
-	bzero(addr, sizeof(*addr));
+	bzero(&hints, sizeof(hints));
+	hints.ai_family = AF_INET;		// Allow IPv4
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;	// For wildcard IP address
+	hints.ai_protocol = 0;			// Any protocol
+	hints.ai_canonname = NULL;
+	hints.ai_addr = NULL;
+	hints.ai_next = NULL;
 
-	socket_fd = socket(PF_INET, SOCK_STREAM, 0);
+	ret = getaddrinfo(NULL, port, &hints, &addr);
+	if (ret) {
+		fprintf(stderr, "getaddrinfo failed: [%d] %s\n", ret, gai_strerror(ret));
+		exit(EXIT_FAILURE);
+	}
+
+	socket_fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
 	if (socket_fd < 0) {
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
 
-	addr->sin_family = AF_INET; // IPv4 addresses
-	addr->sin_addr.s_addr = htonl(INADDR_ANY); // Any incoming interface
-	addr->sin_port = htons(port);
-
-	if (bind(socket_fd, (struct sockaddr*)addr, sizeof(*addr)) < 0) {
+	if (bind(socket_fd, (struct sockaddr*)addr->ai_addr, addr->ai_addrlen) < 0) {
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
@@ -39,7 +51,7 @@ int init_server_net(in_port_t port, struct sockaddr_in *addr) {
 	return socket_fd;
 }
 
-int init_server(in_port_t port, struct sockaddr_in *addr, void **free_list, void **busy_list) {
+int init_server(char *port, struct addrinfo *addr, void **free_list, void **busy_list) {
 	int socket_fd;
 
 	printf("Initializing server...\n");
@@ -51,10 +63,10 @@ int init_server(in_port_t port, struct sockaddr_in *addr, void **free_list, void
 
 int main(int argc, char *argv[]) {
 	int server_sock_fd, client_sock_fd, msg_type, cuda_dev_arr_size, resp_type;
-	in_port_t local_port;
-	struct sockaddr_in local_addr, client_addr;
+	struct sockaddr_in client_addr;
+	struct addrinfo local_addr;
 	socklen_t s;
-    char client_ip[INET_ADDRSTRLEN];
+    char *local_port, client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	void *msg=NULL, *payload, *result=NULL, *cuda_dev_array=NULL, *free_list=NULL, *busy_list=NULL;
 	uint32_t msg_length;
 
@@ -64,15 +76,15 @@ int main(int argc, char *argv[]) {
 	}
 	
 	if (argc == 1) {
-		printf("No port defined, using default %d\n", DEFAULT_PORT);
-		local_port = atoi(DEFAULT_PORT);
+		printf("No port defined, using default %s\n", DEFAULT_PORT);
+		local_port = (char *) DEFAULT_PORT;
 	} else {
-		local_port = atoi(argv[1]);
+		local_port = argv[1];
 	}
 	
 	server_sock_fd = init_server(local_port, &local_addr, &free_list, &busy_list);
 	print_cuda_devices(free_list, busy_list);
-	printf("\nServer listening on port %d for incoming connections...\n", local_port);
+	printf("\nServer listening on port %s for incoming connections...\n", local_port);
 
 	for (;;) {
 		s = sizeof(client_addr);
@@ -83,10 +95,12 @@ int main(int argc, char *argv[]) {
 		}
 
 		printf("\nConnection accepted ");
-		if (inet_ntop(AF_INET, &client_addr.sin_addr.s_addr, client_ip, sizeof(client_ip)) == NULL)
-			printf("from client with unknown ip");
-		else
-			printf("from client %s\n", client_ip);
+		if (getnameinfo((struct sockaddr*)&client_addr, s,
+					client_host, sizeof(client_host), client_serv,
+					sizeof(client_serv), NI_NUMERICHOST | NI_NUMERICSERV) == 0)
+			printf("from client @%s (service @%s)\n", client_host, client_serv);
+		else 
+			printf("from unidentified client");
 
 		msg_length = receive_message(&msg, client_sock_fd);
 		if (msg_length > 0)
@@ -110,7 +124,7 @@ int main(int argc, char *argv[]) {
 				// -- remove this...
 				CudaDeviceList *devs;
 				devs = result;
-				printf("Test result: %s\n",  devs->device[0]->name);
+				printf("Test result: %s\n", devs->device[0]->name);
 				cuda_device__get_packed_size(devs->device[0]);
 				// -- /
 				break;

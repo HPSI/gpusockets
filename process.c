@@ -159,7 +159,7 @@ int process_cuda_device_query(void **result, void **cuda_dev_array, int *cuda_de
 	CUdevice cuda_device;
 
 	printf("Processing CUDA_DEVICE_QUERY\n");
-#if 0
+//#if 0
 	if (*cuda_dev_array == NULL) {
 		res = cuInit(0); 
 		if (res != CUDA_SUCCESS)
@@ -211,7 +211,7 @@ int process_cuda_device_query(void **result, void **cuda_dev_array, int *cuda_de
 		*cuda_dev_array = cuda_devs;
 		*cuda_dev_arr_size = cuda_dev_count;
 	}
-#endif
+//#endif
 
 
 

@@ -7,6 +7,7 @@
 #include "common.h"
 #include "common.pb-c.h"
 
+#if 0
 ssize_t read_socket_msg(int fd, void *buffer, size_t bytes) {
 	ssize_t	b_read, b_total = 0;
 	struct msghdr msghdr;
@@ -32,6 +33,7 @@ ssize_t read_socket_msg(int fd, void *buffer, size_t bytes) {
 
 	return copied;
 }
+#endif
 
 ssize_t read_socket(int fd, void *buffer, size_t bytes) {
 	ssize_t	b_read, b_total = 0;
