@@ -8,7 +8,7 @@
 #include "cuda.h"
 #include "list.h"
 
-// cuGetErrorName() doesn't exist for CUDA < 5.5 ...
+// cuGetErrorName() doesn't exist for CUDA < 6.0 ...
 #if defined(CUDA_VERSION) && CUDA_VERSION < 6000
 CUresult cuGetErrorName(CUresult error, const char** pStr) {
 	const char *a = "no error name";
@@ -31,6 +31,51 @@ CUresult cuda_err_print(CUresult result, int exit_flag) {
 	}
 
 	return result;
+}
+
+void init_device_list(cuda_device_node **list) {
+	cuda_device_node *empty_list;
+
+	empty_list = malloc(sizeof(cuda_device_node));
+	if (empty_list == NULL) {
+		fprintf(stderr, "local_list memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	INIT_LIST_HEAD(&empty_list->node);
+	
+	*list = empty_list;
+}
+
+void init_client_list(client_node **list) {
+	client_node *empty_list;
+
+	empty_list = malloc(sizeof(client_node));
+	if (empty_list == NULL) {
+		fprintf(stderr, "local_list memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	empty_list->cuda_dev_handle = NULL;
+	empty_list->cuda_ctx_handle = NULL;
+
+	INIT_LIST_HEAD(&empty_list->node);
+	
+	*list = empty_list;
+}
+
+void free_cdn_list(void *list) {
+	cuda_device_node *pos, *tmp, *cdn_list;
+	int i = 0;
+	cdn_list = list;
+
+	printf("Freeing list... ");
+	list_for_each_entry_safe(pos, tmp, &cdn_list->node, node) {
+		list_del(&pos->node);
+		free(pos);
+		i++;
+	}
+	printf("%d nodes freed\n", i);
 }
 
 int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
@@ -83,20 +128,8 @@ int discover_cuda_devices(void **free_list, void **busy_list) {
 	printf("Available CUDA devices: %d\n", cuda_dev_count);
 	
 	// Init free and busy CUDA device lists
-	free_cuda_devs = malloc(sizeof(cuda_device_node));
-	if (free_cuda_devs == NULL) {
-		fprintf(stderr, "free_cuda_devs memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
-	
-	busy_cuda_devs = malloc(sizeof(cuda_device_node));
-	if (busy_cuda_devs == NULL) {
-		fprintf(stderr, "busy_cuda_devs memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
-
-	INIT_LIST_HEAD(&free_cuda_devs->node);
-	INIT_LIST_HEAD(&busy_cuda_devs->node);
+	init_device_list(&free_cuda_devs);
+	init_device_list(&busy_cuda_devs);
 
 	// Add available CUDA devices to free_list
 	for (i=0; i<cuda_dev_count; i++)
@@ -118,103 +151,180 @@ void print_cuda_devices(void *free_list, void *busy_list) {
 
 	printf("| Free:\n");
 	list_for_each_entry(pos, &free_list_p->node, node) {
-		printf("|   [%d] %s\n", i, pos->cuda_device_name);
+		printf("|   [%d] %s\n", i++, pos->cuda_device_name);
 	}
 
 	printf("| Busy:\n");
+	i = 0;
 	list_for_each_entry(pos, &busy_list_p->node, node){
-		printf("|   [%d] %s\n", i, pos->cuda_device_name);
+		printf("|   [%d] %s\n", i++, pos->cuda_device_name);
 	}
 }
 
-int process_cuda_cmd(void **result, void *cmd_ptr) {
+int add_client_to_list(void **client_handle, void **client_list, int client_id) {
+	client_node *client_list_p=*client_list, *new_node, *pos;
+
+	if (client_list_p == NULL)
+		init_client_list(&client_list_p);
+	else {
+		// check if client exists in list
+		list_for_each_entry(pos, &client_list_p->node, node) {
+			if (pos->id == client_id) {
+				printf("Client is already in the list\n");
+				*client_handle = pos;
+				return 0;
+			}
+		}
+	}
+
+	new_node = malloc(sizeof(*new_node));
+	if (new_node == NULL) {
+		fprintf(stderr, "new_node memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	new_node->id = client_id;
+
+	fprintf(stdout, "Adding client <%d> to list\n", client_id);
+	list_add_tail(&new_node->node, &client_list_p->node);
+
+	*client_list = client_list_p;
+	*client_handle = new_node;
+	return 0;
+}
+
+void print_clients(void *client_list) {
+	client_node *client_list_p=client_list, *pos;
+	int i = 0;
+
+	printf("\nClients:\n");
+	list_for_each_entry(pos, &client_list_p->node, node) {
+		printf("| [%d] <%d>\n", i++, pos->id);
+	}
+}
+
+int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_list, int dev_ordinal, client_node *client) {
+	cuda_device_node *tmp, *first;
+	int i = 0;
+
+	tmp = list_first_entry_or_null(&free_list->node, cuda_device_node, node);
+	if (tmp == NULL) {
+		printf("No CUDA devices available for assignment\n");
+		return -1;
+	}
+	while (i++ < dev_ordinal) {
+		tmp = list_next_entry(tmp, node);
+		if (&tmp->node == &free_list->node) {
+			printf("No CUDA devices available for assignment with the desired ordinal\n");
+			return -1;
+		}
+	}
+
+	printf("Moving device <%s>@%p to busy list\n", tmp->cuda_device_name, tmp->cuda_device);
+	list_move_tail(&tmp->node, &busy_list->node);
+
+	client->cuda_dev_handle = tmp->cuda_device;
+	return 0;
+}
+
+int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
 	CUresult cuda_result;
 	CudaCmd *cmd = cmd_ptr;
+
+	if (client_handle == NULL) {
+		fprintf(stderr, "process_cuda_cmd: Invalid client handler\n");
+		return -1;
+	}
 
 	printf("Processing CUDA_CMD\n");
 	switch(cmd->type) {
 		case INIT:
 			printf("Executing cuInit...\n");
-			if (cmd->n_uint_args != 1) {
-				fprintf(stderr, "Unsufficient arguments for cuInit!\n");
-				return -1;
-			}
-			cuda_result = cuInit(cmd->uint_args[0]);
+			
+			// cuInit() should have already been executed by the server 
+			// by that point, but running anyway (for now)...
+			cuda_result = cuda_err_print(cuInit(cmd->uint_args[0]), 0);
+			break;
+		case DEVICE_GET:
+			printf("Executing cuDeviceGet...\n");
+			assign_device_to_client(free_list, busy_list, cmd->int_args[0], client_handle);
 			break;
 		case CONTEXT_CREATE:
+			printf("Executing cuCtxCreate...\n");
 			break;
 		case CONTEXT_DESTROY:
+			printf("Executing cuCtxDestroy...\n");
 			break;
 	}
 
 	return 0;
 }
 
-int process_cuda_device_query(void **result, void **cuda_dev_array, int *cuda_dev_arr_size) {
+int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	CudaDeviceList *cuda_devs;
 	CudaDevice **cuda_devs_dev;
 	CUresult res, error = CUDA_SUCCESS;
 	int i, cuda_dev_count = 0;
-	char *cuda_dev_name = NULL;
-	CUdevice cuda_device;
+	cuda_device_node *pos, *free_list_p=free_list, *busy_list_p=busy_list;
 
 	printf("Processing CUDA_DEVICE_QUERY\n");
-//#if 0
-	if (*cuda_dev_array == NULL) {
-		res = cuInit(0); 
-		if (res != CUDA_SUCCESS)
-			return -1;
-
-		// Get device count
-		cuda_err_print(cuDeviceGetCount(&cuda_dev_count), 0);
-		if (cuda_dev_count == 0) {
-			fprintf(stderr, "No CUDA DEVICE available\n");
-			return -1;
-		}
-
-		printf("Available CUDA devices: %d\n", cuda_dev_count);
-
-		// Init variables
-		cuda_devs = malloc(sizeof(CudaDeviceList));
-		if (cuda_devs == NULL) {
-			fprintf(stderr, "cuda_devs memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
-		cuda_device_list__init(cuda_devs);
-		cuda_devs_dev = malloc(sizeof(CudaDevice *) * cuda_dev_count);
-		if (cuda_devs_dev == NULL) {
-			fprintf(stderr, "cuda_devs_dev memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
-
-		// Add devices
-		printf("Adding devices...\n");
-		for (i=0; i<cuda_dev_count; i++) {
-			if (cuda_err_print(cuDeviceGet(&cuda_device, i), 0) != CUDA_SUCCESS)
-				return -1;
-			cuda_dev_name = malloc(CUDA_DEV_NAME_MAX);
-			if (cuda_err_print(cuDeviceGetName(cuda_dev_name, CUDA_DEV_NAME_MAX, cuda_device), 0) != CUDA_SUCCESS)
-				return -1;
-			printf("%d -> %s\n", i, cuda_dev_name);
-			cuda_devs_dev[i] = malloc(sizeof(CudaDevice));
-			if (cuda_devs_dev[i] == NULL) {
-				fprintf(stderr, "cuda_devs_dev[%d] memory allocation failed\n", i);
-				exit(EXIT_FAILURE);
-			}
-			cuda_device__init(cuda_devs_dev[i]);
-			cuda_devs_dev[i]->is_busy = 0;
-			cuda_devs_dev[i]->name = cuda_dev_name;
-		}
-		cuda_devs->n_device = cuda_dev_count;
-		cuda_devs->devices_free = cuda_dev_count;
-		cuda_devs->device = cuda_devs_dev;
-		*cuda_dev_array = cuda_devs;
-		*cuda_dev_arr_size = cuda_dev_count;
+	list_for_each_entry(pos, &free_list_p->node, node) {
+		cuda_dev_count++;
 	}
-//#endif
+	list_for_each_entry(pos, &busy_list_p->node, node){
+		cuda_dev_count++;
+	}
+	printf("Available CUDA devices: %d\n", cuda_dev_count);
+	
+	// Init variables
+	cuda_devs = malloc(sizeof(CudaDeviceList));
+	if (cuda_devs == NULL) {
+		fprintf(stderr, "cuda_devs memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cuda_device_list__init(cuda_devs);
+	cuda_devs_dev = malloc(sizeof(CudaDevice *) * cuda_dev_count);
+	if (cuda_devs_dev == NULL) {
+		fprintf(stderr, "cuda_devs_dev memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
 
+	// Add devices
+	printf("Adding devices...\n");
+	// free
+	i = 0;
+	list_for_each_entry(pos, &free_list_p->node, node) {
+		printf("%d -> %s\n", i, pos->cuda_device_name);
+		cuda_devs_dev[i] = malloc(sizeof(CudaDevice));
+		if (cuda_devs_dev[i] == NULL) {
+			fprintf(stderr, "cuda_devs_dev[%d] memory allocation failed\n", i);
+			exit(EXIT_FAILURE);
+		}
+		cuda_device__init(cuda_devs_dev[i]);
+		cuda_devs_dev[i]->is_busy = 0;
+		cuda_devs_dev[i]->name = pos->cuda_device_name;
+		i++;
+	}
+	cuda_devs->devices_free = i;
+	
+	// busy
+	i = 0;
+	list_for_each_entry(pos, &busy_list_p->node, node){
+		printf("%d -> %s\n", i, pos->cuda_device_name);
+		cuda_devs_dev[i] = malloc(sizeof(CudaDevice));
+		if (cuda_devs_dev[i] == NULL) {
+			fprintf(stderr, "cuda_devs_dev[%d] memory allocation failed\n", i);
+			exit(EXIT_FAILURE);
+		}
+		cuda_device__init(cuda_devs_dev[i]);
+		cuda_devs_dev[i]->is_busy = 1;
+		cuda_devs_dev[i]->name = pos->cuda_device_name;
+		i++;
+	}
+	
+	cuda_devs->n_device = cuda_dev_count;
+	cuda_devs->device = cuda_devs_dev;
+	*result = cuda_devs;
 
-
-	*result = *cuda_dev_array;
 	return 0;
 }

@@ -22,3 +22,13 @@ CUresult cuInit(unsigned int Flags) {
 	printf("libcudawrapper Here...");
 	return; // cuInit_real(Flags);
 }
+
+CUresult cuDeviceGet(CUdevice *device, int ordinal) {
+	static CUresult (*cuDeviceGet_real) (CUdevice *device, int ordinal) = NULL;
+
+	if (!cuDeviceGet_real)
+		cuDeviceGet_real = dlsym(RTLD_NEXT, "cuDeviceGet");
+	
+	printf("libcudawrapper Here...");
+	return; // cuDeviceGet_real(CUdevice *device, int ordinal);
+}

@@ -11,12 +11,26 @@ typedef struct cuda_device_node_s {
 	struct list_head node;
 } cuda_device_node;
 
-int process_cuda_cmd(void **result, void *cmd_ptr);
+typedef struct client_node_s {
+	int id;
+	struct list_head node;
+	CUdevice *cuda_dev_handle;
+	CUcontext *cuda_ctx_handle;
+} client_node;
 
-int process_cuda_device_query(void **result, void **cuda_dev_array, int *cuda_dev_arr_size);
+
+int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_list);
+
+int process_cuda_device_query(void **result, void *free_list, void *busy_list);
 
 int discover_cuda_devices(void **free_list, void **busy_list);
 
 void print_cuda_devices(void *free_list, void *busy_list);
+
+int add_client_to_list(void **client_handle, void **client_list, int client_id); 
+
+void print_clients(void *client_list); 
+
+void free_cdn_list(void *list);
 
 #endif /* PROCESS_H */

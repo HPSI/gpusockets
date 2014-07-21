@@ -62,12 +62,13 @@ int init_server(char *port, struct addrinfo *addr, void **free_list, void **busy
 }
 
 int main(int argc, char *argv[]) {
-	int server_sock_fd, client_sock_fd, msg_type, cuda_dev_arr_size, resp_type;
+	int server_sock_fd, client_sock_fd, msg_type, resp_type;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
 	socklen_t s;
     char *local_port, client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
-	void *msg=NULL, *payload, *result=NULL, *cuda_dev_array=NULL, *free_list=NULL, *busy_list=NULL;
+	void *msg=NULL, *payload=NULL, *result=NULL,
+		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
 	uint32_t msg_length;
 
 	if (argc > 2) {
@@ -98,7 +99,7 @@ int main(int argc, char *argv[]) {
 		if (getnameinfo((struct sockaddr*)&client_addr, s,
 					client_host, sizeof(client_host), client_serv,
 					sizeof(client_serv), NI_NUMERICHOST | NI_NUMERICSERV) == 0)
-			printf("from client @%s (service @%s)\n", client_host, client_serv);
+			printf("from client @%s:%s\n", client_host, client_serv);
 		else 
 			printf("from unidentified client");
 
@@ -111,33 +112,35 @@ int main(int argc, char *argv[]) {
 			msg = NULL;
 		}
 		
-		//CudaDeviceList *sth;, *cuda_dev_array=NULL;
+		add_client_to_list(&client_handle, &client_list, 0);
+		print_clients(client_list);	
+
 		printf("Processing message\n");
 		switch (msg_type) {
 			case CUDA_CMD:
-				process_cuda_cmd(&result, payload);
+				process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
 				resp_type = CUDA_CMD_RESULT;
 				break;
 			case CUDA_DEVICE_QUERY:
-				process_cuda_device_query(&result, &cuda_dev_array, &cuda_dev_arr_size);
+				process_cuda_device_query(&result, free_list, busy_list);
 				resp_type = CUDA_DEVICE_LIST;
 				// -- remove this...
 				CudaDeviceList *devs;
 				devs = result;
 				printf("Test result: %s\n", devs->device[0]->name);
-				cuda_device__get_packed_size(devs->device[0]);
 				// -- /
 				break;
 		}
+		
+		print_cuda_devices(free_list, busy_list);
 			
 		if (result != NULL) {
 			printf("Sending result\n");
 			msg_length = encode_message(&msg, resp_type, result);
 			send_message(client_sock_fd, msg, msg_length);
 			
-			if (result != cuda_dev_array)
-				free(result);
-			
+			// should be more freeing here...	
+			free(result);
 			result = NULL;
 		}
 		printf("--------------\nMessage processed, cleaning up...\n");
@@ -148,6 +151,15 @@ int main(int argc, char *argv[]) {
 		sleep(2); // just for testing...
 		close(client_sock_fd);
 	}
+	
+	if (free_list != NULL)
+		free_cdn_list(free_list);
+
+	if (busy_list != NULL)
+		free_cdn_list(busy_list);
+	
+	if (client_list != NULL)
+		free_cdn_list(client_list);
 
 	return EXIT_FAILURE;
 }

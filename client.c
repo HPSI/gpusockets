@@ -103,36 +103,37 @@ int main(int argc, char *argv[]) {
 
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
 	printf("Connected to server %s on port %s...\n", server_ip, server_port);
-	/*
+
 	// build message payload
-	cmd.type = TEST;
-	cmd.arg_count = 4;
-	cmd.n_int_args = 2;
+	cmd.type = DEVICE_GET;
+	cmd.arg_count = 1;
+	cmd.n_int_args = 1;
 	cmd.int_args = malloc(sizeof(int) * cmd.n_int_args);
 	if (cmd.int_args == NULL) {
-	fprintf(stderr, "cmd.int_args allocation failed\n");
-	exit(EXIT_FAILURE);
+		fprintf(stderr, "cmd.int_args allocation failed\n");
+		exit(EXIT_FAILURE);
 	}
-	cmd.int_args[0] = client_sock_fd;
+	cmd.int_args[0] = 0;
+	/*
 	cmd.int_args[1] = 2;
 	cmd.n_str_args = 2;
 	cmd.str_args = malloc(sizeof(char *) * cmd.n_str_args);
 	if (cmd.str_args == NULL) {
-	fprintf(stderr, "cmd.str_args allocation failed\n");
-	exit(EXIT_FAILURE);
+		fprintf(stderr, "cmd.str_args allocation failed\n");
+		exit(EXIT_FAILURE);
 	}
 	cmd.str_args[0] = a;
 	cmd.str_args[1] = b;
-
+	*/
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd);
 
 	send_message(client_sock_fd, buffer, buf_size);
 
 	free(cmd.int_args);
-	free(cmd.str_args);
+	//free(cmd.str_args);
 	free(buffer);
-	*/
-	get_available_gpus(client_sock_fd);
+
+	//get_available_gpus(client_sock_fd);
 
 	printf("Message sent succesfully\n");
 	close(client_sock_fd);
