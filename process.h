@@ -7,13 +7,15 @@
 #define CUDA_DEV_NAME_MAX 100
 typedef struct cuda_device_node_s {
 	CUdevice *cuda_device;
-	char cuda_device_name[CUDA_DEV_NAME_MAX];
 	struct list_head node;
+	char cuda_device_name[CUDA_DEV_NAME_MAX];
+	int is_busy;
 } cuda_device_node;
 
 typedef struct client_node_s {
 	int id;
 	struct list_head node;
+	cuda_device_node *cuda_dev_node;
 	CUdevice *cuda_dev_handle;
 	CUcontext *cuda_ctx_handle;
 } client_node;

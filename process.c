@@ -11,7 +11,9 @@
 // cuGetErrorName() doesn't exist for CUDA < 6.0 ...
 #if defined(CUDA_VERSION) && CUDA_VERSION < 6000
 CUresult cuGetErrorName(CUresult error, const char** pStr) {
-	const char *a = "no error name";
+	char *a;
+	a = malloc(sizeof(char) * (strlen("<no error name>")+1));
+	strcpy(a, "<no error name>");
 	*pStr = a;
 
 	return CUDA_SUCCESS;
@@ -19,12 +21,12 @@ CUresult cuGetErrorName(CUresult error, const char** pStr) {
 #endif
 
 CUresult cuda_err_print(CUresult result, int exit_flag) {
-	const char **cuda_err_str = NULL;
+	const char *cuda_err_str = NULL;
 	
 	if (result != CUDA_SUCCESS) {
-		cuGetErrorName(result, cuda_err_str);
+		cuGetErrorName(result, &cuda_err_str);
 		fprintf(stderr, "CUDA Driver API error: %04d - %s [file <%s>, line %i]\n",
-				result, *cuda_err_str, __FILE__, __LINE__);
+				result, cuda_err_str, __FILE__, __LINE__);
 	
 		if (exit_flag != 0)
 			exit(EXIT_FAILURE);
@@ -55,9 +57,6 @@ void init_client_list(client_node **list) {
 		fprintf(stderr, "local_list memory allocation failed\n");
 		exit(EXIT_FAILURE);
 	}
-
-	empty_list->cuda_dev_handle = NULL;
-	empty_list->cuda_ctx_handle = NULL;
 
 	INIT_LIST_HEAD(&empty_list->node);
 	
@@ -102,8 +101,8 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 			return -1;
 
 		cuda_dev_node->cuda_device = cuda_device;
-
 		memcpy(cuda_dev_node->cuda_device_name, cuda_dev_name, CUDA_DEV_NAME_MAX);
+		cuda_dev_node->is_busy = 0;
 
 		fprintf(stdout, "Adding device [%d]@%p -> %s\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name);
 
@@ -203,8 +202,8 @@ void print_clients(void *client_list) {
 	}
 }
 
-int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_list, int dev_ordinal, client_node *client) {
-	cuda_device_node *tmp, *first;
+int update_device_of_client(cuda_device_node *free_list, int dev_ordinal, client_node *client) {
+	cuda_device_node *tmp;
 	int i = 0;
 
 	tmp = list_first_entry_or_null(&free_list->node, cuda_device_node, node);
@@ -220,15 +219,55 @@ int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_
 		}
 	}
 
-	printf("Moving device <%s>@%p to busy list\n", tmp->cuda_device_name, tmp->cuda_device);
-	list_move_tail(&tmp->node, &busy_list->node);
-
-	client->cuda_dev_handle = tmp->cuda_device;
+	client->cuda_dev_node = tmp;
 	return 0;
 }
 
+int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
+	cuda_device_node *device_node;
+	int i = 0;
+
+	device_node = client->cuda_dev_node;
+	if (device_node->is_busy == 1) {
+		fprintf(stderr, "Requested CUDA device is busy\n");
+		return -1;
+	}
+
+
+	printf("Moving device <%s>@%p to busy list\n", device_node->cuda_device_name, device_node->cuda_device);
+	device_node->is_busy = 1;
+	list_move_tail(&device_node->node, &busy_list->node);
+
+	client->cuda_dev_handle = device_node->cuda_device;
+	return 0;
+}
+
+int create_context_of_client(unsigned int flags, client_node *client) {
+	CUcontext *cuda_context;
+	CUresult res = 0;
+
+	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *(client->cuda_dev_handle)), 0);
+
+	if (res == CUDA_SUCCESS)
+		client->cuda_ctx_handle = cuda_context;
+
+	return res;
+}
+
+int destroy_context_of_client(client_node *client) {
+	CUresult res = 0;
+	
+	if (client->cuda_ctx_handle != NULL) 
+		res = cuda_err_print(cuCtxDestroy(*(client->cuda_ctx_handle)), 0);
+
+	if (res == CUDA_SUCCESS)
+		client->cuda_ctx_handle = NULL;
+
+	return res;
+}
+
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
-	CUresult cuda_result;
+	CUresult cuda_result = 0;
 	CudaCmd *cmd = cmd_ptr;
 
 	if (client_handle == NULL) {
@@ -247,17 +286,29 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case DEVICE_GET:
 			printf("Executing cuDeviceGet...\n");
-			assign_device_to_client(free_list, busy_list, cmd->int_args[0], client_handle);
+			if(update_device_of_client(free_list,cmd->int_args[0], client_handle) < 0)
+				cuda_result = CUDA_ERROR_INVALID_DEVICE;
+			else
+				cuda_result = CUDA_SUCCESS;
+
 			break;
 		case CONTEXT_CREATE:
 			printf("Executing cuCtxCreate...\n");
+			if(assign_device_to_client(free_list, busy_list, client_handle) < 0) {
+				// TODO: Device was busy, give appropriate response to client.
+				cuda_result = -2;
+				break;
+			}
+			cuda_result = create_context_of_client(cmd->uint_args[0], client_handle);
+
 			break;
 		case CONTEXT_DESTROY:
 			printf("Executing cuCtxDestroy...\n");
+			cuda_result = destroy_context_of_client(client_handle);
 			break;
 	}
 
-	return 0;
+	return cuda_result;
 }
 
 int process_cuda_device_query(void **result, void *free_list, void *busy_list) {

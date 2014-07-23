@@ -103,52 +103,53 @@ int main(int argc, char *argv[]) {
 		else 
 			printf("from unidentified client");
 
-		msg_length = receive_message(&msg, client_sock_fd);
-		if (msg_length > 0)
-			msg_type = decode_message(&payload, msg, msg_length);
-			
-		if (msg != NULL) {
-			free(msg);
-			msg = NULL;
-		}
-		
-		add_client_to_list(&client_handle, &client_list, 0);
-		print_clients(client_list);	
+		for(;;) {
+			msg_length = receive_message(&msg, client_sock_fd);
+			if (msg_length > 0)
+				msg_type = decode_message(&payload, msg, msg_length);
 
-		printf("Processing message\n");
-		switch (msg_type) {
-			case CUDA_CMD:
-				process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
-				resp_type = CUDA_CMD_RESULT;
-				break;
-			case CUDA_DEVICE_QUERY:
-				process_cuda_device_query(&result, free_list, busy_list);
-				resp_type = CUDA_DEVICE_LIST;
-				// -- remove this...
-				CudaDeviceList *devs;
-				devs = result;
-				printf("Test result: %s\n", devs->device[0]->name);
-				// -- /
-				break;
-		}
-		
-		print_cuda_devices(free_list, busy_list);
-			
-		if (result != NULL) {
-			printf("Sending result\n");
-			msg_length = encode_message(&msg, resp_type, result);
-			send_message(client_sock_fd, msg, msg_length);
-			
-			// should be more freeing here...	
-			free(result);
-			result = NULL;
-		}
-		printf("--------------\nMessage processed, cleaning up...\n");
-		if (msg != NULL) {
-			free(msg);
-			msg = NULL;
-		}
-		sleep(2); // just for testing...
+			if (msg != NULL) {
+				free(msg);
+				msg = NULL;
+			}
+
+			add_client_to_list(&client_handle, &client_list, 0);
+			print_clients(client_list);	
+
+			printf("Processing message\n");
+			switch (msg_type) {
+				case CUDA_CMD:
+					process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
+					resp_type = CUDA_CMD_RESULT;
+					break;
+				case CUDA_DEVICE_QUERY:
+					process_cuda_device_query(&result, free_list, busy_list);
+					resp_type = CUDA_DEVICE_LIST;
+					// -- remove this...
+					CudaDeviceList *devs;
+					devs = result;
+					printf("Test result: %s\n", devs->device[0]->name);
+					// -- /
+					break;
+			}
+
+			print_cuda_devices(free_list, busy_list);
+
+			if (result != NULL) {
+				printf("Sending result\n");
+				msg_length = encode_message(&msg, resp_type, result);
+				send_message(client_sock_fd, msg, msg_length);
+
+				// should be more freeing here...	
+				free(result);
+				result = NULL;
+			}
+			printf("--------------\nMessage processed, cleaning up...\n");
+			if (msg != NULL) {
+				free(msg);
+				msg = NULL;
+			}
+		}// for testing...
 		close(client_sock_fd);
 	}
 	

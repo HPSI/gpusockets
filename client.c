@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 	char *server_port;
 	struct addrinfo server_addr;
 	char *server_ip, *a = "Hello", *b = "world";
-	CudaCmd cmd = CUDA_CMD__INIT;
+	CudaCmd cmd1 = CUDA_CMD__INIT, cmd2 = CUDA_CMD__INIT, cmd3 = CUDA_CMD__INIT;
 	void *buffer=NULL; 
 
 	if (argc > 3 || argc < 2) {
@@ -105,32 +105,55 @@ int main(int argc, char *argv[]) {
 	printf("Connected to server %s on port %s...\n", server_ip, server_port);
 
 	// build message payload
-	cmd.type = DEVICE_GET;
-	cmd.arg_count = 1;
-	cmd.n_int_args = 1;
-	cmd.int_args = malloc(sizeof(int) * cmd.n_int_args);
-	if (cmd.int_args == NULL) {
-		fprintf(stderr, "cmd.int_args allocation failed\n");
+	cmd1.type = DEVICE_GET;
+	cmd1.arg_count = 1;
+	cmd1.n_int_args = 1;
+	cmd1.int_args = malloc(sizeof(int) * cmd1.n_int_args);
+	if (cmd1.int_args == NULL) {
+		fprintf(stderr, "cmd1.int_args allocation failed\n");
 		exit(EXIT_FAILURE);
 	}
-	cmd.int_args[0] = 0;
+	cmd1.int_args[0] = 0;
 	/*
-	cmd.int_args[1] = 2;
-	cmd.n_str_args = 2;
-	cmd.str_args = malloc(sizeof(char *) * cmd.n_str_args);
-	if (cmd.str_args == NULL) {
-		fprintf(stderr, "cmd.str_args allocation failed\n");
+	cmd1.int_args[1] = 2;
+	cmd1.n_str_args = 2;
+	cmd1.str_args = malloc(sizeof(char *) * cmd1.n_str_args);
+	if (cmd1.str_args == NULL) {
+		fprintf(stderr, "cmd1.str_args allocation failed\n");
 		exit(EXIT_FAILURE);
 	}
-	cmd.str_args[0] = a;
-	cmd.str_args[1] = b;
+	cmd1.str_args[0] = a;
+	cmd1.str_args[1] = b;
 	*/
-	buf_size = encode_message(&buffer, CUDA_CMD, &cmd);
-
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd1);
 	send_message(client_sock_fd, buffer, buf_size);
 
-	free(cmd.int_args);
+	free(cmd1.int_args);
+	free(buffer);
+	// --
+
+	cmd2.type = CONTEXT_CREATE;
+	cmd2.arg_count = 1;
+	cmd2.n_uint_args = 1;
+	cmd2.uint_args = malloc(sizeof(int) * cmd2.n_uint_args);
+	if (cmd2.uint_args == NULL) {
+		fprintf(stderr, "cmd2.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd2.uint_args[0] = 0;
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd2);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd2.uint_args);
 	//free(cmd.str_args);
+	free(buffer);
+	// --
+
+	cmd3.type = CONTEXT_DESTROY;
+	cmd3.arg_count = 0;
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd3);
+	send_message(client_sock_fd, buffer, buf_size);
+
 	free(buffer);
 
 	//get_available_gpus(client_sock_fd);

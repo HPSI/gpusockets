@@ -6,5 +6,6 @@ int main() {
 
 	cuInit(0);
 	cuDeviceGet(&device, 0);
+	//myCuFinish();
 	printf("test-cuda Done...\n");
 }
