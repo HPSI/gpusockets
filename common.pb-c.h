@@ -37,12 +37,12 @@ struct  _CudaCmd
   uint32_t *uint_args;
   size_t n_str_args;
   char **str_args;
-  protobuf_c_boolean has_extra_args;
-  ProtobufCBinaryData extra_args;
+  size_t n_extra_args;
+  ProtobufCBinaryData *extra_args;
 };
 #define CUDA_CMD__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&cuda_cmd__descriptor) \
-    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0,{0,NULL} }
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
 
 
 struct  _CudaDevice

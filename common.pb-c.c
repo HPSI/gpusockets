@@ -244,9 +244,9 @@ static const ProtobufCFieldDescriptor cuda_cmd__field_descriptors[6] =
   {
     "extra_args",
     6,
-    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_BYTES,
-    offsetof(CudaCmd, has_extra_args),
+    offsetof(CudaCmd, n_extra_args),
     offsetof(CudaCmd, extra_args),
     NULL,
     NULL,

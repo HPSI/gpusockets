@@ -20,9 +20,14 @@ libcudawrapper: libcudawrapper.so.o common.pb-c.so.o common.pb-c.h
 	$(CC) $(CFLAGS) -shared -o libcudawrapper.so libcudawrapper.so.o \
 	   	common.pb-c.so.o $(LDLIBS) -ldl
 
-%.o: %.c
-	#$(CC) $(CFLAGS) -I/usr/local/cuda/include -c $<
+process.o: process.c process.h cuda_errors.h
 	$(CC) $(CFLAGS) -I$(CUDA_PATH)/include -c $<
+
+%.o: %.c
+	$(CC) $(CFLAGS) -I$(CUDA_PATH)/include -c $<
+
+process.so.o: process.c process.h cuda_errors.h
+	$(CC) $(CFLAGS) -I$(CUDA_PATH)/include -fPIC -o $@ -c $<
 
 libcudawrapper.so.o: libcudawrapper.c
 	$(CC) $(CFLAGS) -I$(CUDA_PATH)/include -fPIC -o $@ -c $<

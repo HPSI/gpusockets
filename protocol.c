@@ -69,7 +69,7 @@ ssize_t write_socket(int fd, void *buffer, size_t bytes) {
 }
 
 void send_message(int sock_fd, void *buffer, size_t buf_size) {
-	printf("Going to send %zd bytes...\n", buf_size);
+	printf("Going to send %zu bytes...\n", buf_size);
 	write_socket(sock_fd, buffer, buf_size);
 }
 
@@ -102,10 +102,8 @@ uint32_t receive_message(void **enc_msg, int sock_fd) {
 	return msg_length;
 }
 
-int decode_message(void **result, void *enc_msg, uint32_t enc_msg_length) {
-	int msg_type;
+int decode_message(void **result, void **payload, void *enc_msg, uint32_t enc_msg_length) {
 	Cookie *msg;
-	//CudaCmd *cmd;
 
 	printf("Decoding message data...\n");
 	msg = cookie__unpack(NULL, enc_msg_length, (uint8_t *)enc_msg);
@@ -114,51 +112,27 @@ int decode_message(void **result, void *enc_msg, uint32_t enc_msg_length) {
 		return -1;
 	}
 	
-	//msg = *msg_ro;
-	//*result = &msg;
-	//*result = malloc(enc_msg_length);
-	//memcpy(*result, msg, enc_msg_length);
-
 	switch (msg->type) {
 		case CUDA_CMD:
 			printf("--------------\nIs CUDA_CMD\n");
-
-			*result = malloc(sizeof(CudaCmd));
-			memcpy(*result, msg->cuda_cmd, sizeof(CudaCmd));
-			/*
-			printf("Decoding cmd data...\n");
-
-			switch (cmd->type) {
-				case TEST:
-					printf("-Type: TEST\n");
-					printf("-Arguments: %u\n", cmd->arg_count);
-					for (i = 0; i < cmd->n_int_args; i++) { 
-						printf ("--int: %d\n", cmd->int_args[i]);
-					}
-					for (i = 0; i < cmd->n_str_args; i++) { 
-						printf ("--str: %s\n", cmd->str_args[i]);
-					}
-
-					break;
-			}
-			*/
+			*payload = msg->cuda_cmd;
 			break;
 		case CUDA_DEVICE_QUERY:
 			printf("--------------\nIs CUDA_DEVICE_QUERY\n");
-			
-			*result = NULL;
+			*payload = NULL;
 			break;
 		case CUDA_DEVICE_LIST:
 			printf("--------------\nIs CUDA_DEVICE_LIST\n");
-			
-			*result = malloc(sizeof(CudaDeviceList));
-			memcpy(*result, msg->cuda_devices, sizeof(CudaDeviceList));
+			*payload = msg->cuda_devices;
 			break;
 	}
 	
-	msg_type = msg->type;
-	cookie__free_unpacked(msg, NULL);
-	return msg_type;
+	// We can't call this here unless we make a *deep* copy of the
+	// message payload...
+	//cookie__free_unpacked(msg, NULL);
+	*result = msg; 
+
+	return msg->type;
 }
 
 size_t encode_message(void **result, int msg_type, void *payload) {
@@ -167,6 +141,7 @@ size_t encode_message(void **result, int msg_type, void *payload) {
 	Cookie message = COOKIE__INIT;
 	void *buffer, *msg_buffer; 
 
+	printf("Encoding message data...\n");
 	message.type = msg_type;
 
 	switch (msg_type) {
@@ -201,4 +176,11 @@ size_t encode_message(void **result, int msg_type, void *payload) {
 	*result = buffer;
 
 	return buf_size;
+}
+
+void free_decoded_message(void *msg) {
+//	Cookie *message = msg;
+
+	printf("Freeing allocated memory for message...\n");
+	cookie__free_unpacked((Cookie *) msg, NULL);
 }

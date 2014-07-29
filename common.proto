@@ -4,7 +4,7 @@ message CudaCmd {
 	repeated int32 int_args = 3;
 	repeated uint32 uint_args = 4;
 	repeated string str_args = 5;
-	optional bytes extra_args = 6;
+	repeated bytes extra_args = 6;
 }
 
 message CudaDevice {

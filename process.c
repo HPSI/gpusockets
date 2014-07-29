@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include "process.h"
 #include "common.h"
 #include "common.pb-c.h"
@@ -10,12 +13,18 @@
 
 // cuGetErrorName() doesn't exist for CUDA < 6.0 ...
 #if defined(CUDA_VERSION) && CUDA_VERSION < 6000
-CUresult cuGetErrorName(CUresult error, const char** pStr) {
-	char *a;
-	a = malloc(sizeof(char) * (strlen("<no error name>")+1));
-	strcpy(a, "<no error name>");
-	*pStr = a;
+#include "cuda_errors.h"
 
+CUresult cuGetErrorName(CUresult error, const char** pStr) {
+	if (error > CUDA_RESULT_STRING_ARR_SIZE) {
+		*pStr = NULL;
+		return CUDA_ERROR_INVALID_VALUE;
+	}
+
+	*pStr = CUDA_RESULT_STRING[error];
+	if (*pStr == NULL)
+		return CUDA_ERROR_INVALID_VALUE;
+		
 	return CUDA_SUCCESS;
 }
 #endif
@@ -25,7 +34,7 @@ CUresult cuda_err_print(CUresult result, int exit_flag) {
 	
 	if (result != CUDA_SUCCESS) {
 		cuGetErrorName(result, &cuda_err_str);
-		fprintf(stderr, "CUDA Driver API error: %04d - %s [file <%s>, line %i]\n",
+		fprintf(stderr, "-\nCUDA Driver API error: %04d - %s [file <%s>, line %i]\n-\n",
 				result, cuda_err_str, __FILE__, __LINE__);
 	
 		if (exit_flag != 0)
@@ -33,6 +42,68 @@ CUresult cuda_err_print(CUresult result, int exit_flag) {
 	}
 
 	return result;
+}
+
+size_t read_cuda_module_file(void **buffer, const char *filename) {
+	size_t b_read=0, buf_size;
+	int i = 1;
+	FILE *fd;
+	struct stat st;
+	void *buf = NULL;
+
+	printf("Reading from file <%s> ... ", filename); 
+	fd = fopen(filename, "rb");
+	if (fd == NULL) {
+		perror("fopen failed");
+		exit(EXIT_FAILURE);
+	}
+	
+
+	if (fstat(fileno(fd), &st) != 0) {
+		fprintf(stderr, "Reading file size failed: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	} else if ((!S_ISREG(st.st_mode)) && (!S_ISLNK(st.st_mode))) {
+		fprintf(stderr, "Getting file size failed: Not a regular file or symbolic link\n");
+		exit(EXIT_FAILURE);
+	}
+
+	buf = malloc(st.st_size);
+	if (buf == NULL) {
+		fprintf(stderr, "buf memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	b_read = fread(buf, 1, st.st_size, fd);
+	if (b_read == 0 && ferror(fd) != 0) {
+		fprintf(stderr, "fread failed: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+
+	}
+	printf("read: %zu ... ", b_read);
+
+	if (b_read != st.st_size) {
+		fprintf(stderr, "Reading file failed: read %zu vs %jd expected\n", b_read, st.st_size);
+		exit(EXIT_FAILURE);
+	}
+	
+	*buffer = buf;
+
+	fclose(fd);
+	printf("Done\n");
+
+	return b_read;
+}
+
+void print_file_as_hex(uint8_t *file, size_t file_size) {
+	int i;
+	
+	printf("File size: %zu\n", file_size);
+	for (i = 0; i < file_size; i++) {
+		if (i % 14 == 0)
+			printf("\n");
+		printf("%02X ", (char) file[i]);
+	}
+	printf("\n");
 }
 
 void init_device_list(cuda_device_node **list) {
@@ -78,37 +149,37 @@ void free_cdn_list(void *list) {
 }
 
 int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
-		cuda_device_node *cuda_dev_node;
-		char cuda_dev_name[CUDA_DEV_NAME_MAX];
-		CUdevice *cuda_device;
-	   
-		cuda_device = malloc(sizeof(CUdevice));
-		if (cuda_device == NULL) {
-			fprintf(stderr, "cuda_device memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
+	cuda_device_node *cuda_dev_node;
+	char cuda_dev_name[CUDA_DEV_NAME_MAX];
+	CUdevice *cuda_device;
 
-		cuda_dev_node = malloc(sizeof(*cuda_dev_node));
-		if (cuda_dev_node == NULL) {
-			fprintf(stderr, "cuda_dev_node memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
+	cuda_device = malloc(sizeof(CUdevice));
+	if (cuda_device == NULL) {
+		fprintf(stderr, "cuda_device memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
 
-		if (cuda_err_print(cuDeviceGet(cuda_device, dev_id), 0) != CUDA_SUCCESS)
-			return -1;
+	cuda_dev_node = malloc(sizeof(*cuda_dev_node));
+	if (cuda_dev_node == NULL) {
+		fprintf(stderr, "cuda_dev_node memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
 
-		if (cuda_err_print(cuDeviceGetName(cuda_dev_name, CUDA_DEV_NAME_MAX, *cuda_device), 0) != CUDA_SUCCESS)
-			return -1;
+	if (cuda_err_print(cuDeviceGet(cuda_device, dev_id), 0) != CUDA_SUCCESS)
+		return -1;
 
-		cuda_dev_node->cuda_device = cuda_device;
-		memcpy(cuda_dev_node->cuda_device_name, cuda_dev_name, CUDA_DEV_NAME_MAX);
-		cuda_dev_node->is_busy = 0;
+	if (cuda_err_print(cuDeviceGetName(cuda_dev_name, CUDA_DEV_NAME_MAX, *cuda_device), 0) != CUDA_SUCCESS)
+		return -1;
 
-		fprintf(stdout, "Adding device [%d]@%p -> %s\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name);
+	cuda_dev_node->cuda_device = cuda_device;
+	memcpy(cuda_dev_node->cuda_device_name, cuda_dev_name, CUDA_DEV_NAME_MAX);
+	cuda_dev_node->is_busy = 0;
 
-		list_add_tail(&cuda_dev_node->node, &dev_list->node);
+	fprintf(stdout, "Adding device [%d]@%p -> %s\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name);
 
-		return 0;
+	list_add_tail(&cuda_dev_node->node, &dev_list->node);
+
+	return 0;
 }
 
 int discover_cuda_devices(void **free_list, void **busy_list) {
@@ -183,8 +254,12 @@ int add_client_to_list(void **client_handle, void **client_list, int client_id) 
 	}
 
 	new_node->id = client_id;
+	new_node->cuda_dev_handle = NULL;
+	new_node->cuda_ctx_handle = NULL;
+	new_node->cuda_dev_handle = NULL;
+	new_node->cuda_fun_handle = NULL;
 
-	fprintf(stdout, "Adding client <%d> to list\n", client_id);
+	printf("Adding client <%d> to list\n", client_id);
 	list_add_tail(&new_node->node, &client_list_p->node);
 
 	*client_list = client_list_p;
@@ -206,17 +281,18 @@ int update_device_of_client(cuda_device_node *free_list, int dev_ordinal, client
 	cuda_device_node *tmp;
 	int i = 0;
 
+	// TODO: support more than one devices per client.
 	printf("Updating device of client <%d> ... ", client->id);
 
 	tmp = list_first_entry_or_null(&free_list->node, cuda_device_node, node);
 	if (tmp == NULL) {
-		printf("No CUDA devices available for assignment\n");
+		fprintf(stderr, "No CUDA devices available for assignment\n");
 		return -1;
 	}
 	while (i++ < dev_ordinal) {
 		tmp = list_next_entry(tmp, node);
 		if (&tmp->node == &free_list->node) {
-			printf("No CUDA devices available for assignment with the desired ordinal\n");
+			fprintf(stderr, "No CUDA devices available for assignment with the desired ordinal\n");
 			return -1;
 		}
 	}
@@ -267,6 +343,7 @@ int create_context_of_client(unsigned int flags, client_node *client) {
 	CUcontext *cuda_context;
 	CUresult res = 0;
 
+	// TODO: support more than one contexts per client.
 	printf("Creating CUDA context of client <%d> ... ", client->id);
 
 	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *(client->cuda_dev_handle)), 0);
@@ -281,7 +358,8 @@ int create_context_of_client(unsigned int flags, client_node *client) {
 
 int destroy_context_of_client(client_node *client) {
 	CUresult res = 0;
-	
+
+	// TODO: free modules/functions allocated handles (?)	
 	printf("Destroying CUDA context of client <%d> ... ", client->id);
 	
 	if (client->cuda_ctx_handle != NULL) 
@@ -295,6 +373,48 @@ int destroy_context_of_client(client_node *client) {
 	return res;
 }
 
+int load_module_of_client(ProtobufCBinaryData *image, client_node *client) {
+	CUresult res;
+	CUmodule *cuda_module;
+
+	// TODO: support more than one modules per client.	
+	printf("Loading CUDA module of client <%d> ... ", client->id);
+
+	cuda_module = malloc(sizeof(*cuda_module));
+	if (cuda_module == NULL) {
+		fprintf(stderr, "cuda_module memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res = cuda_err_print(cuModuleLoadData(cuda_module, image->data), 0);
+
+	if (res == CUDA_SUCCESS)
+		client->cuda_mod_handle = cuda_module;
+
+	return res;
+}
+
+int get_module_function_of_client(char *func_name, client_node *client) {
+	CUresult res;
+	CUfunction *cuda_func;
+
+	// TODO: support more than one functions per client.	
+	printf("Loading CUDA module function of client <%d> ... ", client->id);
+
+	cuda_func = malloc(sizeof(*cuda_func));
+	if (cuda_func == NULL) {
+		fprintf(stderr, "cuda_func memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res = cuda_err_print(cuModuleGetFunction(cuda_func,
+				*(client->cuda_mod_handle), func_name), 0);
+
+	if (res == CUDA_SUCCESS)
+		client->cuda_fun_handle = cuda_func;
+
+	return res;
+}
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
 	CUresult cuda_result = 0;
 	CudaCmd *cmd = cmd_ptr;
@@ -315,6 +435,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case DEVICE_GET:
 			printf("Executing cuDeviceGet...\n");
+			printf("cmd->int_args[0] = %d\n", cmd->int_args[0]);
 			if(update_device_of_client(free_list,cmd->int_args[0], client_handle) < 0)
 				cuda_result = CUDA_ERROR_INVALID_DEVICE;
 			else
@@ -335,6 +456,15 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			printf("Executing cuCtxDestroy...\n");
 			cuda_result = destroy_context_of_client(client_handle);
 			free_device_from_client(free_list, busy_list, client_handle);
+			break;
+		case MODULE_LOAD:
+			printf("Executing cuModuleLoad...\n");
+			//print_file_as_hex(cmd->extra_args[0].data, cmd->extra_args[0].len);
+			cuda_result = load_module_of_client(&(cmd->extra_args[0]), client_handle);
+			break;
+		case MODULE_GET_FUNCTION:
+			printf("Executing cuModuleGetFuction...\n");
+			cuda_result = get_module_function_of_client(cmd->str_args[0], client_handle);
 			break;
 	}
 

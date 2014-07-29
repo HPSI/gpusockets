@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 	struct addrinfo local_addr;
 	socklen_t s;
     char *local_port, client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
-	void *msg=NULL, *payload=NULL, *result=NULL,
+	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
 		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
 	uint32_t msg_length;
 
@@ -103,22 +103,17 @@ int main(int argc, char *argv[]) {
 		else 
 			printf("from unidentified client");
 
-		for(;;) {
+		//for(;;) {
 			msg_length = receive_message(&msg, client_sock_fd);
 			if (msg_length > 0)
-				msg_type = decode_message(&payload, msg, msg_length);
-
-			if (msg != NULL) {
-				free(msg);
-				msg = NULL;
-			}
+				msg_type = decode_message(&dec_msg, &payload, msg, msg_length);
 
 			add_client_to_list(&client_handle, &client_list, 0);
 			print_clients(client_list);	
 
 			printf("Processing message\n");
 			switch (msg_type) {
-				case CUDA_CMD:
+				case CUDA_CMD: 
 					process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
 					resp_type = CUDA_CMD_RESULT;
 					break;
@@ -135,6 +130,21 @@ int main(int argc, char *argv[]) {
 
 			print_cuda_devices(free_list, busy_list);
 
+			if (msg != NULL) {
+				free(msg);
+				msg = NULL;
+			}
+			if (payload != NULL) {
+				free(msg);
+				msg = NULL;
+			}
+			if (dec_msg != NULL) {
+				free_decoded_message(dec_msg);
+				dec_msg = NULL;
+				// payload should be invalid now
+				payload = NULL;
+			}
+
 			if (result != NULL) {
 				printf("Sending result\n");
 				msg_length = encode_message(&msg, resp_type, result);
@@ -149,9 +159,9 @@ int main(int argc, char *argv[]) {
 				free(msg);
 				msg = NULL;
 			}
-		}// for testing...
-		close(client_sock_fd);
+		//}// for testing...
 	}
+	close(client_sock_fd);
 	
 	if (free_list != NULL)
 		free_cdn_list(free_list);
