@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "process.h"
 #include "common.h"
 #include "common.pb-c.h"
@@ -277,7 +278,7 @@ void print_clients(void *client_list) {
 	}
 }
 
-int update_device_of_client(cuda_device_node *free_list, int dev_ordinal, client_node *client) {
+int update_device_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, int dev_ordinal, client_node *client) {
 	cuda_device_node *tmp;
 	int i = 0;
 
@@ -298,6 +299,8 @@ int update_device_of_client(cuda_device_node *free_list, int dev_ordinal, client
 	}
 
 	client->cuda_dev_node = tmp;
+	*dev_ptr = (uintptr_t) tmp->cuda_device;
+
 	printf("updated to <%s>@%p\n", tmp->cuda_device_name, tmp->cuda_device);
 
 	return 0;
@@ -339,7 +342,7 @@ int free_device_from_client(cuda_device_node *free_list, cuda_device_node *busy_
 	return 0;
 }
 
-int create_context_of_client(unsigned int flags, client_node *client) {
+int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, client_node *client) {
 	CUcontext *cuda_context;
 	CUresult res = 0;
 
@@ -348,8 +351,10 @@ int create_context_of_client(unsigned int flags, client_node *client) {
 
 	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *(client->cuda_dev_handle)), 0);
 
-	if (res == CUDA_SUCCESS)
+	if (res == CUDA_SUCCESS) {
 		client->cuda_ctx_handle = cuda_context;
+		*ctx_ptr = (uintptr_t) cuda_context;
+	}
 
 	printf("created @%p ... Done\n", cuda_context);
 
@@ -373,7 +378,7 @@ int destroy_context_of_client(client_node *client) {
 	return res;
 }
 
-int load_module_of_client(ProtobufCBinaryData *image, client_node *client) {
+int load_module_of_client(uintptr_t *mod_ptr, ProtobufCBinaryData *image, client_node *client) {
 	CUresult res;
 	CUmodule *cuda_module;
 
@@ -388,13 +393,15 @@ int load_module_of_client(ProtobufCBinaryData *image, client_node *client) {
 
 	res = cuda_err_print(cuModuleLoadData(cuda_module, image->data), 0);
 
-	if (res == CUDA_SUCCESS)
+	if (res == CUDA_SUCCESS) {
 		client->cuda_mod_handle = cuda_module;
+		*mod_ptr = (uintptr_t) cuda_module;
+	}
 
 	return res;
 }
 
-int get_module_function_of_client(char *func_name, client_node *client) {
+int get_module_function_of_client(uintptr_t *fun_ptr, char *func_name, client_node *client) {
 	CUresult res;
 	CUfunction *cuda_func;
 
@@ -410,14 +417,81 @@ int get_module_function_of_client(char *func_name, client_node *client) {
 	res = cuda_err_print(cuModuleGetFunction(cuda_func,
 				*(client->cuda_mod_handle), func_name), 0);
 
-	if (res == CUDA_SUCCESS)
+	if (res == CUDA_SUCCESS) {
 		client->cuda_fun_handle = cuda_func;
+		*fun_ptr = (uintptr_t) cuda_func;
+	}
 
 	return res;
 }
+
+int memory_allocate_for_client(uintptr_t *dev_mem_ptr, size_t mem_size) {
+	CUresult res;
+	CUdeviceptr *cuda_dev_ptr;
+	
+	printf("Allocating CUDA device memory of size %zuB...\n", mem_size);
+	cuda_dev_ptr = malloc(sizeof(*cuda_dev_ptr));
+	if (cuda_dev_ptr == NULL) {
+		fprintf(stderr, "cuda_dev_ptr memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	res = cuda_err_print(cuMemAlloc(cuda_dev_ptr, mem_size), 0);
+	if (res == CUDA_SUCCESS) {
+		*dev_mem_ptr = (uintptr_t) cuda_dev_ptr;
+	}
+
+	return res;
+}
+
+int memory_free_for_client(uintptr_t dev_mem_ptr) {
+	CUresult res;
+	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+
+	printf("Freeing CUDA device memory @%p...\n", cuda_dev_ptr);
+
+	res = cuda_err_print(cuMemFree(*cuda_dev_ptr), 0);
+
+	return res;
+}
+
+int memcpy_host_to_dev_for_client(uintptr_t dev_mem_ptr, void *host_mem_ptr, size_t mem_size) {
+	CUresult res;
+	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+
+	printf("Memcpying %zuB from host to CUDA device @%p...\n", mem_size, cuda_dev_ptr);
+
+	res = cuda_err_print(cuMemcpyHtoD(*cuda_dev_ptr, host_mem_ptr, mem_size), 0);
+
+	return res;
+}
+
+int memcpy_dev_to_host_for_client(void **host_mem_ptr, size_t *host_mem_size, uintptr_t dev_mem_ptr, size_t mem_size) {
+	CUresult res;
+	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+
+	printf("Memcpying %zuB from CUDA device @%p to host...\n", mem_size, cuda_dev_ptr);
+
+	*host_mem_size = mem_size;
+	*host_mem_ptr = malloc(mem_size);
+	if (*host_mem_ptr == NULL) {
+		fprintf(stderr, "host_mem_ptr memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res = cuda_err_print(cuMemcpyDtoH(*host_mem_ptr, *cuda_dev_ptr, mem_size), 0);
+
+	return res;
+}
+
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
 	CUresult cuda_result = 0;
 	CudaCmd *cmd = cmd_ptr;
+	uintptr_t id_ptr = 0;
+	void *extra_args = NULL, *res_data = NULL;
+	size_t extra_args_size = 0, res_length = 0;
+	var *res = NULL;
+	var_type res_type;
 
 	if (client_handle == NULL) {
 		fprintf(stderr, "process_cuda_cmd: Invalid client handler\n");
@@ -428,7 +502,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 	switch(cmd->type) {
 		case INIT:
 			printf("Executing cuInit...\n");
-			
+
 			// cuInit() should have already been executed by the server 
 			// by that point, but running anyway (for now)...
 			cuda_result = cuda_err_print(cuInit(cmd->uint_args[0]), 0);
@@ -436,7 +510,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case DEVICE_GET:
 			printf("Executing cuDeviceGet...\n");
 			printf("cmd->int_args[0] = %d\n", cmd->int_args[0]);
-			if(update_device_of_client(free_list,cmd->int_args[0], client_handle) < 0)
+			if(update_device_of_client(&id_ptr, free_list, cmd->int_args[0], client_handle) < 0)
 				cuda_result = CUDA_ERROR_INVALID_DEVICE;
 			else
 				cuda_result = CUDA_SUCCESS;
@@ -449,7 +523,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 				cuda_result = -2;
 				break;
 			}
-			cuda_result = create_context_of_client(cmd->uint_args[0], client_handle);
+			cuda_result = create_context_of_client(&id_ptr, cmd->uint_args[0], client_handle);
 
 			break;
 		case CONTEXT_DESTROY:
@@ -460,13 +534,59 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case MODULE_LOAD:
 			printf("Executing cuModuleLoad...\n");
 			//print_file_as_hex(cmd->extra_args[0].data, cmd->extra_args[0].len);
-			cuda_result = load_module_of_client(&(cmd->extra_args[0]), client_handle);
+			cuda_result = load_module_of_client(&id_ptr, &(cmd->extra_args[0]), client_handle);
 			break;
 		case MODULE_GET_FUNCTION:
 			printf("Executing cuModuleGetFuction...\n");
-			cuda_result = get_module_function_of_client(cmd->str_args[0], client_handle);
+			cuda_result = get_module_function_of_client(&id_ptr, cmd->str_args[0], client_handle);
+			break;
+		case MEMORY_ALLOCATE:
+			printf("Executing cuMemAlloc...\n");
+			cuda_result = memory_allocate_for_client(&id_ptr, cmd->uint_args[0]);
+			break;
+		case MEMORY_FREE:
+			printf("Executing cuMemFree...\n");
+			cuda_result = memory_free_for_client(cmd->uint_args[0]);
+			break;
+		case MEMCPY_HOST_TO_DEV:
+			printf("Executing cuMemcpyHtoD...\n");
+			cuda_result = memcpy_host_to_dev_for_client(cmd->uint_args[0], cmd->extra_args[0].data, cmd->extra_args[0].len);
+			break;
+		case MEMCPY_DEV_TO_HOST:
+			printf("Executing cuMemcpyDtoH...\n");
+			cuda_result = memcpy_dev_to_host_for_client(&extra_args, &extra_args_size, cmd->uint_args[0], cmd->uint_args[1]);
 			break;
 	}
+
+	if (id_ptr != 0) {
+		res_type = UINT;
+		res_length = sizeof(uintptr_t);
+		res_data = &id_ptr;
+	} else if (extra_args_size != 0) {	
+		res_type = BYTES;
+		res_length = extra_args_size;
+		res_data = extra_args;
+	}
+
+	if (res_length > 0) {
+		res = malloc(sizeof(*res));
+		if (res == NULL) {
+			fprintf(stderr, "res memory allocation failed\n");
+			exit(EXIT_FAILURE);
+		}
+		res->type = res_type;
+		res->length = res_length;
+		res->data = malloc(res_length);
+		if (res->data == NULL) {
+			fprintf(stderr, "res->data memory allocation failed\n");
+			exit(EXIT_FAILURE);
+		}
+		memcpy(res->data, res_data, res_length);
+	}
+	*result = res;
+
+	if (extra_args != NULL)
+		free(extra_args);
 
 	return cuda_result;
 }
@@ -474,7 +594,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	CudaDeviceList *cuda_devs;
 	CudaDevice **cuda_devs_dev;
-	CUresult res, error = CUDA_SUCCESS;
+	CUresult res = CUDA_SUCCESS;
 	int i, cuda_dev_count = 0;
 	cuda_device_node *pos, *free_list_p=free_list, *busy_list_p=busy_list;
 
@@ -537,5 +657,60 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	cuda_devs->device = cuda_devs_dev;
 	*result = cuda_devs;
 
+	return 0;
+}
+
+int pack_cuda_cmd_result(void **payload, void *result, int res_code) {
+	var *res = result;
+	CudaCmd *cmd;
+
+	printf("Packing CUDA cmd result...\n");
+	
+	cmd = malloc(sizeof(CudaCmd));
+	if (cmd == NULL) {
+		fprintf(stderr, "cmd memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cuda_cmd__init(cmd);
+
+	cmd->type = RESULT;
+	if (res != NULL) {
+		cmd->arg_count = 2;
+		switch (res->type) {
+			case UINT:
+				cmd->n_uint_args = 1;
+				cmd->uint_args = malloc(sizeof(*(cmd->uint_args)) * cmd->n_uint_args);
+				if (cmd->uint_args == NULL) {
+					fprintf(stderr, "cmd->uint_args memory allocation failed\n");
+					exit(EXIT_FAILURE);
+				}
+				cmd->uint_args = res->data;
+				printf("result: %p\n", (void *)cmd->uint_args[0]);
+				break;
+			case BYTES:
+				cmd->n_extra_args = 1;
+				cmd->extra_args = malloc(sizeof(*(cmd->extra_args)) * cmd->n_extra_args);
+				if (cmd->extra_args == NULL) {
+					fprintf(stderr, "cmd->extra_args memory allocation failed\n");
+					exit(EXIT_FAILURE);
+				}
+				cmd->extra_args[0].data = res->data;
+				cmd->extra_args[0].len = res->length;
+				break;
+		}
+	} else {
+		cmd->arg_count = 1;
+	}
+	cmd->n_int_args = 1;
+	cmd->int_args = malloc(sizeof(*(cmd->int_args)) * cmd->n_int_args);
+	if (cmd->int_args == NULL) {
+		fprintf(stderr, "cmd->int_args memory allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd->int_args[0] = res_code;
+
+	printf("res_code: %" PRId64 "\n", cmd->int_args[0]);
+
+	*payload = cmd;
 	return 0;
 }

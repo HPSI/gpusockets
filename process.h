@@ -39,4 +39,6 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list);
 
 void free_cdn_list(void *list);
 
+int pack_cuda_cmd_result(void **payload, void *result, int res_code);
+
 #endif /* PROCESS_H */

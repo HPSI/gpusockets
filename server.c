@@ -62,7 +62,7 @@ int init_server(char *port, struct addrinfo *addr, void **free_list, void **busy
 }
 
 int main(int argc, char *argv[]) {
-	int server_sock_fd, client_sock_fd, msg_type, resp_type;
+	int server_sock_fd, client_sock_fd, msg_type, resp_type, res_code;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
 	socklen_t s;
@@ -88,6 +88,7 @@ int main(int argc, char *argv[]) {
 	printf("\nServer listening on port %s for incoming connections...\n", local_port);
 
 	for (;;) {
+		resp_type = -1;
 		s = sizeof(client_addr);
 		client_sock_fd = accept(server_sock_fd, (struct sockaddr*)&client_addr, &s);
 		if (client_sock_fd < 0) {
@@ -114,7 +115,7 @@ int main(int argc, char *argv[]) {
 			printf("Processing message\n");
 			switch (msg_type) {
 				case CUDA_CMD: 
-					process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
+					res_code = process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
 					resp_type = CUDA_CMD_RESULT;
 					break;
 				case CUDA_DEVICE_QUERY:
@@ -134,10 +135,6 @@ int main(int argc, char *argv[]) {
 				free(msg);
 				msg = NULL;
 			}
-			if (payload != NULL) {
-				free(msg);
-				msg = NULL;
-			}
 			if (dec_msg != NULL) {
 				free_decoded_message(dec_msg);
 				dec_msg = NULL;
@@ -145,14 +142,17 @@ int main(int argc, char *argv[]) {
 				payload = NULL;
 			}
 
-			if (result != NULL) {
+			if (resp_type != -1) {
 				printf("Sending result\n");
-				msg_length = encode_message(&msg, resp_type, result);
+				pack_cuda_cmd_result(&payload, result, res_code);
+				msg_length = encode_message(&msg, resp_type, payload);
 				send_message(client_sock_fd, msg, msg_length);
-
-				// should be more freeing here...	
-				free(result);
-				result = NULL;
+				
+				if (result != NULL) {
+					// should be more freeing here...
+					free(result);
+					result = NULL;
+				}
 			}
 			printf("--------------\nMessage processed, cleaning up...\n");
 			if (msg != NULL) {

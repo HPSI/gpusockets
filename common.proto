@@ -1,8 +1,8 @@
 message CudaCmd {
 	required uint32 type = 1;
 	required uint32 arg_count = 2;
-	repeated int32 int_args = 3;
-	repeated uint32 uint_args = 4;
+	repeated int64 int_args = 3;
+	repeated uint64 uint_args = 4;
 	repeated string str_args = 5;
 	repeated bytes extra_args = 6;
 }

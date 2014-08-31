@@ -32,9 +32,9 @@ struct  _CudaCmd
   uint32_t type;
   uint32_t arg_count;
   size_t n_int_args;
-  int32_t *int_args;
+  int64_t *int_args;
   size_t n_uint_args;
-  uint32_t *uint_args;
+  uint64_t *uint_args;
   size_t n_str_args;
   char **str_args;
   size_t n_extra_args;

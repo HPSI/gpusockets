@@ -117,6 +117,10 @@ int decode_message(void **result, void **payload, void *enc_msg, uint32_t enc_ms
 			printf("--------------\nIs CUDA_CMD\n");
 			*payload = msg->cuda_cmd;
 			break;
+		case CUDA_CMD_RESULT:
+			printf("--------------\nIs CUDA_CMD_RESULT\n");
+			*payload = msg->cuda_cmd;
+			break;
 		case CUDA_DEVICE_QUERY:
 			printf("--------------\nIs CUDA_DEVICE_QUERY\n");
 			*payload = NULL;
@@ -146,6 +150,7 @@ size_t encode_message(void **result, int msg_type, void *payload) {
 
 	switch (msg_type) {
 		case CUDA_CMD:
+		case CUDA_CMD_RESULT:
 			message.cuda_cmd = payload;
 			break;
 		case CUDA_DEVICE_QUERY:
