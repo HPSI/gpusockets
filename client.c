@@ -129,17 +129,19 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 
 
 int main(int argc, char *argv[]) {
-	int client_sock_fd;
+	int client_sock_fd, test_arg = 10, test_res = 0;
 	size_t buf_size, file_size;
 	char *server_port;
 	struct addrinfo server_addr;
 	char *server_ip, *a = "Hello", *b = "world";
-	uint64_t ptr1;
+	uint64_t func_ptr, ptr1, ptr2, ptr3;
 	CudaCmd cmd1 = CUDA_CMD__INIT, cmd2 = CUDA_CMD__INIT,
 			cmd3 = CUDA_CMD__INIT, cmd4 = CUDA_CMD__INIT,
 			cmd5 = CUDA_CMD__INIT, cmd6 = CUDA_CMD__INIT,
 			cmd7 = CUDA_CMD__INIT, cmd8 = CUDA_CMD__INIT,
-			cmd9 = CUDA_CMD__INIT;
+			cmd9 = CUDA_CMD__INIT, cmd10 = CUDA_CMD__INIT,
+			cmd11 = CUDA_CMD__INIT, cmd12 = CUDA_CMD__INIT,
+			cmd13 = CUDA_CMD__INIT;
 	void *buffer = NULL, *file = NULL, *result = NULL; 
 
 	if (argc > 3 || argc < 2) {
@@ -262,6 +264,7 @@ int main(int argc, char *argv[]) {
 	free(cmd4.str_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
+	func_ptr = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
@@ -293,32 +296,23 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd6
 	 **/	
-	cmd6.type = MEMCPY_HOST_TO_DEV;
-	cmd6.arg_count = 2;
-	cmd6.n_extra_args = 1;
-	cmd6.extra_args = malloc(sizeof(*(cmd6.extra_args)) * cmd6.n_extra_args);
-	if (cmd6.extra_args == NULL) {
-		fprintf(stderr, "cmd6.extra_args allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
-	cmd6.extra_args[0].data = (void *)&client_sock_fd;
-	cmd6.extra_args[0].len = sizeof(int);
-	
+	cmd6.type = MEMORY_ALLOCATE;
+	cmd6.arg_count = 1;
 	cmd6.n_uint_args =1;
 	cmd6.uint_args = malloc(sizeof(*(cmd6.uint_args)) * cmd6.n_uint_args);
 	if (cmd6.uint_args == NULL) {
 		fprintf(stderr, "cmd6.uint_args allocation failed\n");
 		exit(EXIT_FAILURE);
 	}
-	cmd6.uint_args[0] = ptr1;
+	cmd6.uint_args[0] = sizeof(int);
 
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd6);
 	send_message(client_sock_fd, buffer, buf_size);
 
-	free(cmd6.extra_args);
 	free(cmd6.uint_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
+	ptr2 = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
@@ -326,16 +320,15 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd7
 	 **/	
-	cmd7.type = MEMCPY_DEV_TO_HOST;
-	cmd7.arg_count = 2;
-	cmd7.n_uint_args = 2;
+	cmd7.type = MEMORY_ALLOCATE;
+	cmd7.arg_count = 1;
+	cmd7.n_uint_args =1;
 	cmd7.uint_args = malloc(sizeof(*(cmd7.uint_args)) * cmd7.n_uint_args);
 	if (cmd7.uint_args == NULL) {
 		fprintf(stderr, "cmd7.uint_args allocation failed\n");
 		exit(EXIT_FAILURE);
 	}
-	cmd7.uint_args[0] = ptr1;
-	cmd7.uint_args[1] = sizeof(int);
+	cmd7.uint_args[0] = sizeof(int);
 
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd7);
 	send_message(client_sock_fd, buffer, buf_size);
@@ -343,6 +336,7 @@ int main(int argc, char *argv[]) {
 	free(cmd7.uint_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
+	ptr3 = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
@@ -350,8 +344,17 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd8
 	 **/	
-	cmd8.type = MEMORY_FREE;
-	cmd8.arg_count = 1;
+	cmd8.type = MEMCPY_HOST_TO_DEV;
+	cmd8.arg_count = 2;
+	cmd8.n_extra_args = 1;
+	cmd8.extra_args = malloc(sizeof(*(cmd8.extra_args)) * cmd8.n_extra_args);
+	if (cmd8.extra_args == NULL) {
+		fprintf(stderr, "cmd8.extra_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd8.extra_args[0].data = (void *)&test_arg;
+	cmd8.extra_args[0].len = sizeof(int);
+	
 	cmd8.n_uint_args =1;
 	cmd8.uint_args = malloc(sizeof(*(cmd8.uint_args)) * cmd8.n_uint_args);
 	if (cmd8.uint_args == NULL) {
@@ -363,6 +366,7 @@ int main(int argc, char *argv[]) {
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd8);
 	send_message(client_sock_fd, buffer, buf_size);
 
+	free(cmd8.extra_args);
 	free(cmd8.uint_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
@@ -373,9 +377,131 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd9
 	 **/	
-	cmd9.type = CONTEXT_DESTROY;
-	cmd9.arg_count = 0;
+	cmd9.type = MEMCPY_HOST_TO_DEV;
+	cmd9.arg_count = 2;
+	cmd9.n_extra_args = 1;
+	cmd9.extra_args = malloc(sizeof(*(cmd9.extra_args)) * cmd9.n_extra_args);
+	if (cmd9.extra_args == NULL) {
+		fprintf(stderr, "cmd9.extra_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd9.extra_args[0].data = (void *)&test_arg;
+	cmd9.extra_args[0].len = sizeof(int);
+	
+	cmd9.n_uint_args =1;
+	cmd9.uint_args = malloc(sizeof(*(cmd9.uint_args)) * cmd9.n_uint_args);
+	if (cmd9.uint_args == NULL) {
+		fprintf(stderr, "cmd9.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd9.uint_args[0] = ptr2;
+
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd9);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd9.extra_args);
+	free(cmd9.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd10
+	 **/	
+	cmd10.type = LAUNCH_KERNEL;
+	cmd10.arg_count = 12;
+	cmd10.n_uint_args = 12;
+	cmd10.uint_args = malloc(sizeof(*(cmd10.uint_args)) * cmd10.n_uint_args);
+	if (cmd10.uint_args == NULL) {
+		fprintf(stderr, "cmd10.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	// blocks
+	cmd10.uint_args[0] = 1;
+	cmd10.uint_args[1] = 1;
+	cmd10.uint_args[2] = 1;
+	// threads
+	cmd10.uint_args[3] = 1;
+	cmd10.uint_args[4] = 1;
+	cmd10.uint_args[5] = 1;
+	// shared mem size
+	cmd10.uint_args[6] = 0;
+	// function
+	cmd10.uint_args[7] = func_ptr;
+	// stream
+	cmd10.uint_args[8] = 0;
+	// params
+	cmd10.uint_args[9] = ptr1;
+	cmd10.uint_args[10] = ptr2;
+	cmd10.uint_args[11] = ptr3;
+	
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd10);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd10.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd11
+	 **/	
+	cmd11.type = MEMCPY_DEV_TO_HOST;
+	cmd11.arg_count = 2;
+	cmd11.n_uint_args = 2;
+	cmd11.uint_args = malloc(sizeof(*(cmd11.uint_args)) * cmd11.n_uint_args);
+	if (cmd11.uint_args == NULL) {
+		fprintf(stderr, "cmd11.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd11.uint_args[0] = ptr3;
+	cmd11.uint_args[1] = sizeof(int);
+
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd11);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd11.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	test_res = *(int *) result;
+	printf("\nExecution result: %d\n\n", test_res);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd12
+	 **/	
+	cmd12.type = MEMORY_FREE;
+	cmd12.arg_count = 1;
+	cmd12.n_uint_args =1;
+	cmd12.uint_args = malloc(sizeof(*(cmd12.uint_args)) * cmd12.n_uint_args);
+	if (cmd12.uint_args == NULL) {
+		fprintf(stderr, "cmd12.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd12.uint_args[0] = ptr1;
+
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd12);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd12.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd13
+	 **/	
+	cmd13.type = CONTEXT_DESTROY;
+	cmd13.arg_count = 0;
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd13);
 	send_message(client_sock_fd, buffer, buf_size);
 
 	free(buffer);

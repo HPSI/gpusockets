@@ -451,6 +451,8 @@ int memory_free_for_client(uintptr_t dev_mem_ptr) {
 	printf("Freeing CUDA device memory @%p...\n", cuda_dev_ptr);
 
 	res = cuda_err_print(cuMemFree(*cuda_dev_ptr), 0);
+	if (res == CUDA_SUCCESS)
+		free(cuda_dev_ptr);
 
 	return res;
 }
@@ -481,6 +483,31 @@ int memcpy_dev_to_host_for_client(void **host_mem_ptr, size_t *host_mem_size, ui
 
 	res = cuda_err_print(cuMemcpyDtoH(*host_mem_ptr, *cuda_dev_ptr, mem_size), 0);
 
+	return res;
+}
+
+int launch_kernel_of_client(uint64_t *uints, size_t n_uints, void **extra) {
+	CUresult res;
+	unsigned int grid_x = uints[0], grid_y = uints[1], grid_z = uints[2],
+				 block_x = uints[3], block_y = uints[4], block_z = uints[5],
+				 shared_mem_size = uints[6];
+	CUfunction *func = (CUfunction *) uints[7];
+	CUstream h_stream = (uints[8] != 0) ? *(CUstream *) uints[8] : 0;
+	void **params=NULL;
+	size_t i, n_params = n_uints - 9;
+
+	if (n_params > 0) {
+		params = malloc(sizeof(void *) * n_params);
+		for(i = 0; i < n_params; i++) {
+			params[i] = (void *) uints[9 + i]; 
+		}
+
+	}
+
+	res = cuda_err_print(cuLaunchKernel(*func, grid_x, grid_y, grid_z,
+				block_x, block_y, block_z, shared_mem_size, h_stream,
+				params, extra), 0);
+	
 	return res;
 }
 
@@ -555,6 +582,11 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case MEMCPY_DEV_TO_HOST:
 			printf("Executing cuMemcpyDtoH...\n");
 			cuda_result = memcpy_dev_to_host_for_client(&extra_args, &extra_args_size, cmd->uint_args[0], cmd->uint_args[1]);
+			break;
+		case LAUNCH_KERNEL:
+			printf("Executing cuLaunchKernel...\n");
+			// TODO: Don't ignore cuLaunchKernel "extra" argument.
+			cuda_result = launch_kernel_of_client(cmd->uint_args, cmd->n_uint_args, NULL);
 			break;
 	}
 
