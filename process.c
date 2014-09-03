@@ -486,28 +486,52 @@ int memcpy_dev_to_host_for_client(void **host_mem_ptr, size_t *host_mem_size, ui
 	return res;
 }
 
-int launch_kernel_of_client(uint64_t *uints, size_t n_uints, void **extra) {
+int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData *extras, size_t n_extras) {
 	CUresult res;
 	unsigned int grid_x = uints[0], grid_y = uints[1], grid_z = uints[2],
 				 block_x = uints[3], block_y = uints[4], block_z = uints[5],
 				 shared_mem_size = uints[6];
 	CUfunction *func = (CUfunction *) uints[7];
 	CUstream h_stream = (uints[8] != 0) ? *(CUstream *) uints[8] : 0;
-	void **params=NULL;
+	void **params = NULL, **extra = NULL;
 	size_t i, n_params = n_uints - 9;
 
 	if (n_params > 0) {
 		params = malloc(sizeof(void *) * n_params);
+		if (params == NULL) {
+			fprintf(stderr, "params memory allocation failed\n");
+			exit(EXIT_FAILURE);
+		}
+	
 		for(i = 0; i < n_params; i++) {
 			params[i] = (void *) uints[9 + i]; 
 		}
+	}
+	if (n_extras > 0) {
+		extra = malloc(sizeof(void *) * 5);
+		if (extra == NULL) {
+			fprintf(stderr, "extra memory allocation failed\n");
+			exit(EXIT_FAILURE);
+		}
+
+		extra[0] = CU_LAUNCH_PARAM_BUFFER_POINTER;
+		extra[1] = extras[0].data;
+		extra[2] = CU_LAUNCH_PARAM_BUFFER_SIZE;
+		extra[3] = &(extras[0].len);
+		extra[4] = CU_LAUNCH_PARAM_END;
 
 	}
 
 	res = cuda_err_print(cuLaunchKernel(*func, grid_x, grid_y, grid_z,
 				block_x, block_y, block_z, shared_mem_size, h_stream,
 				params, extra), 0);
-	
+
+	if (params != NULL)
+		free(params);
+
+	if (extra != NULL)
+		free(extra);
+
 	return res;
 }
 
@@ -529,7 +553,6 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 	switch(cmd->type) {
 		case INIT:
 			printf("Executing cuInit...\n");
-
 			// cuInit() should have already been executed by the server 
 			// by that point, but running anyway (for now)...
 			cuda_result = cuda_err_print(cuInit(cmd->uint_args[0]), 0);
@@ -585,8 +608,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case LAUNCH_KERNEL:
 			printf("Executing cuLaunchKernel...\n");
-			// TODO: Don't ignore cuLaunchKernel "extra" argument.
-			cuda_result = launch_kernel_of_client(cmd->uint_args, cmd->n_uint_args, NULL);
+			cuda_result = launch_kernel_of_client(cmd->uint_args, cmd->n_uint_args, cmd->extra_args, cmd->n_extra_args);
 			break;
 	}
 

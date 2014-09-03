@@ -141,7 +141,8 @@ int main(int argc, char *argv[]) {
 			cmd7 = CUDA_CMD__INIT, cmd8 = CUDA_CMD__INIT,
 			cmd9 = CUDA_CMD__INIT, cmd10 = CUDA_CMD__INIT,
 			cmd11 = CUDA_CMD__INIT, cmd12 = CUDA_CMD__INIT,
-			cmd13 = CUDA_CMD__INIT;
+			cmd13 = CUDA_CMD__INIT, cmd14 = CUDA_CMD__INIT,
+			cmd15 = CUDA_CMD__INIT;
 	void *buffer = NULL, *file = NULL, *result = NULL; 
 
 	if (argc > 3 || argc < 2) {
@@ -499,9 +500,55 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd13
 	 **/	
-	cmd13.type = CONTEXT_DESTROY;
-	cmd13.arg_count = 0;
+	cmd13.type = MEMORY_FREE;
+	cmd13.arg_count = 1;
+	cmd13.n_uint_args =1;
+	cmd13.uint_args = malloc(sizeof(*(cmd13.uint_args)) * cmd13.n_uint_args);
+	if (cmd13.uint_args == NULL) {
+		fprintf(stderr, "cmd13.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd13.uint_args[0] = ptr2;
+
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd13);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd13.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd14
+	 **/	
+	cmd14.type = MEMORY_FREE;
+	cmd14.arg_count = 1;
+	cmd14.n_uint_args =1;
+	cmd14.uint_args = malloc(sizeof(*(cmd14.uint_args)) * cmd14.n_uint_args);
+	if (cmd14.uint_args == NULL) {
+		fprintf(stderr, "cmd14.uint_args allocation failed\n");
+		exit(EXIT_FAILURE);
+	}
+	cmd14.uint_args[0] = ptr3;
+
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd14);
+	send_message(client_sock_fd, buffer, buf_size);
+
+	free(cmd14.uint_args);
+	free(buffer);
+	get_cuda_cmd_result(&result, client_sock_fd);
+	// --
+	close(client_sock_fd);
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+
+	/**
+	 * cmd15
+	 **/	
+	cmd15.type = CONTEXT_DESTROY;
+	cmd15.arg_count = 0;
+	buf_size = encode_message(&buffer, CUDA_CMD, &cmd15);
 	send_message(client_sock_fd, buffer, buf_size);
 
 	free(buffer);
