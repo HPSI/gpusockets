@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <inttypes.h>
+
 #include "process.h"
 #include "common.h"
 #include "common.pb-c.h"
@@ -30,13 +31,16 @@ CUresult cuGetErrorName(CUresult error, const char** pStr) {
 }
 #endif
 
-CUresult cuda_err_print(CUresult result, int exit_flag) {
+#define cuda_err_print(res, ef) \
+	cuda_error_print(res, ef, __FILE__, __LINE__)
+
+inline CUresult cuda_error_print(CUresult result, int exit_flag, const char *file, const int line) {
 	const char *cuda_err_str = NULL;
 	
 	if (result != CUDA_SUCCESS) {
 		cuGetErrorName(result, &cuda_err_str);
-		fprintf(stderr, "-\nCUDA Driver API error: %04d - %s [file <%s>, line %i]\n-\n",
-				result, cuda_err_str, __FILE__, __LINE__);
+		fprintf(stderr, "-\nCUDA Driver API error: %04d - %s [%s, %i]\n-\n",
+				result, cuda_err_str, file, line);
 	
 		if (exit_flag != 0)
 			exit(EXIT_FAILURE);
@@ -46,8 +50,7 @@ CUresult cuda_err_print(CUresult result, int exit_flag) {
 }
 
 size_t read_cuda_module_file(void **buffer, const char *filename) {
-	size_t b_read=0, buf_size;
-	int i = 1;
+	size_t b_read = 0;
 	FILE *fd;
 	struct stat st;
 	void *buf = NULL;
@@ -68,11 +71,7 @@ size_t read_cuda_module_file(void **buffer, const char *filename) {
 		exit(EXIT_FAILURE);
 	}
 
-	buf = malloc(st.st_size);
-	if (buf == NULL) {
-		fprintf(stderr, "buf memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	buf = malloc_safe(st.st_size);
 
 	b_read = fread(buf, 1, st.st_size, fd);
 	if (b_read == 0 && ferror(fd) != 0) {
@@ -110,11 +109,7 @@ void print_file_as_hex(uint8_t *file, size_t file_size) {
 void init_device_list(cuda_device_node **list) {
 	cuda_device_node *empty_list;
 
-	empty_list = malloc(sizeof(cuda_device_node));
-	if (empty_list == NULL) {
-		fprintf(stderr, "local_list memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	empty_list = malloc_safe(sizeof(cuda_device_node));
 
 	INIT_LIST_HEAD(&empty_list->node);
 	
@@ -124,11 +119,7 @@ void init_device_list(cuda_device_node **list) {
 void init_client_list(client_node **list) {
 	client_node *empty_list;
 
-	empty_list = malloc(sizeof(client_node));
-	if (empty_list == NULL) {
-		fprintf(stderr, "local_list memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	empty_list = malloc_safe(sizeof(client_node));
 
 	INIT_LIST_HEAD(&empty_list->node);
 	
@@ -154,17 +145,9 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 	char cuda_dev_name[CUDA_DEV_NAME_MAX];
 	CUdevice *cuda_device;
 
-	cuda_device = malloc(sizeof(CUdevice));
-	if (cuda_device == NULL) {
-		fprintf(stderr, "cuda_device memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_device = malloc_safe(sizeof(CUdevice));
 
-	cuda_dev_node = malloc(sizeof(*cuda_dev_node));
-	if (cuda_dev_node == NULL) {
-		fprintf(stderr, "cuda_dev_node memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_dev_node = malloc_safe(sizeof(*cuda_dev_node));
 
 	if (cuda_err_print(cuDeviceGet(cuda_device, dev_id), 0) != CUDA_SUCCESS)
 		return -1;
@@ -248,11 +231,7 @@ int add_client_to_list(void **client_handle, void **client_list, int client_id) 
 		}
 	}
 
-	new_node = malloc(sizeof(*new_node));
-	if (new_node == NULL) {
-		fprintf(stderr, "new_node memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	new_node = malloc_safe(sizeof(*new_node));
 
 	new_node->id = client_id;
 	new_node->cuda_dev_handle = NULL;
@@ -308,7 +287,6 @@ int update_device_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, int
 
 int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
 	cuda_device_node *device_n;
-	int i = 0;
 
 	device_n = client->cuda_dev_node;
 	printf("Assigning device <%s>@%p to client <%d> ...\n", device_n->cuda_device_name, device_n->cuda_device, client->id);
@@ -346,17 +324,21 @@ int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, client_node
 	CUcontext *cuda_context;
 	CUresult res = 0;
 
+	cuda_context = malloc_safe(sizeof(CUcontext));
+
 	// TODO: support more than one contexts per client.
 	printf("Creating CUDA context of client <%d> ... ", client->id);
+	printf("\n%p\n", client->cuda_dev_handle);
 
 	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *(client->cuda_dev_handle)), 0);
 
 	if (res == CUDA_SUCCESS) {
 		client->cuda_ctx_handle = cuda_context;
 		*ctx_ptr = (uintptr_t) cuda_context;
+		printf("created @%p ... Done\n", cuda_context);
+	} else {
+		printf("failed ... Done\n");
 	}
-
-	printf("created @%p ... Done\n", cuda_context);
 
 	return res;
 }
@@ -385,11 +367,7 @@ int load_module_of_client(uintptr_t *mod_ptr, ProtobufCBinaryData *image, client
 	// TODO: support more than one modules per client.	
 	printf("Loading CUDA module of client <%d> ... ", client->id);
 
-	cuda_module = malloc(sizeof(*cuda_module));
-	if (cuda_module == NULL) {
-		fprintf(stderr, "cuda_module memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_module = malloc_safe(sizeof(*cuda_module));
 
 	res = cuda_err_print(cuModuleLoadData(cuda_module, image->data), 0);
 
@@ -408,11 +386,7 @@ int get_module_function_of_client(uintptr_t *fun_ptr, char *func_name, client_no
 	// TODO: support more than one functions per client.	
 	printf("Loading CUDA module function of client <%d> ... ", client->id);
 
-	cuda_func = malloc(sizeof(*cuda_func));
-	if (cuda_func == NULL) {
-		fprintf(stderr, "cuda_func memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_func = malloc_safe(sizeof(*cuda_func));
 
 	res = cuda_err_print(cuModuleGetFunction(cuda_func,
 				*(client->cuda_mod_handle), func_name), 0);
@@ -430,11 +404,7 @@ int memory_allocate_for_client(uintptr_t *dev_mem_ptr, size_t mem_size) {
 	CUdeviceptr *cuda_dev_ptr;
 	
 	printf("Allocating CUDA device memory of size %zuB...\n", mem_size);
-	cuda_dev_ptr = malloc(sizeof(*cuda_dev_ptr));
-	if (cuda_dev_ptr == NULL) {
-		fprintf(stderr, "cuda_dev_ptr memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_dev_ptr = malloc_safe(sizeof(*cuda_dev_ptr));
 	
 	res = cuda_err_print(cuMemAlloc(cuda_dev_ptr, mem_size), 0);
 	if (res == CUDA_SUCCESS) {
@@ -475,11 +445,7 @@ int memcpy_dev_to_host_for_client(void **host_mem_ptr, size_t *host_mem_size, ui
 	printf("Memcpying %zuB from CUDA device @%p to host...\n", mem_size, cuda_dev_ptr);
 
 	*host_mem_size = mem_size;
-	*host_mem_ptr = malloc(mem_size);
-	if (*host_mem_ptr == NULL) {
-		fprintf(stderr, "host_mem_ptr memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	*host_mem_ptr = malloc_safe(mem_size);
 
 	res = cuda_err_print(cuMemcpyDtoH(*host_mem_ptr, *cuda_dev_ptr, mem_size), 0);
 
@@ -497,22 +463,14 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 	size_t i, n_params = n_uints - 9;
 
 	if (n_params > 0) {
-		params = malloc(sizeof(void *) * n_params);
-		if (params == NULL) {
-			fprintf(stderr, "params memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
+		params = malloc_safe(sizeof(void *) * n_params);
 	
 		for(i = 0; i < n_params; i++) {
 			params[i] = (void *) uints[9 + i]; 
 		}
 	}
 	if (n_extras > 0) {
-		extra = malloc(sizeof(void *) * 5);
-		if (extra == NULL) {
-			fprintf(stderr, "extra memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
+		extra = malloc_safe(sizeof(void *) * 5);
 
 		extra[0] = CU_LAUNCH_PARAM_BUFFER_POINTER;
 		extra[1] = extras[0].data;
@@ -536,12 +494,12 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 }
 
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
-	CUresult cuda_result = 0;
+	int cuda_result = 0, arg_count = 0;
 	CudaCmd *cmd = cmd_ptr;
 	uintptr_t id_ptr = 0;
 	void *extra_args = NULL, *res_data = NULL;
 	size_t extra_args_size = 0, res_length = 0;
-	var *res = NULL;
+	var **res = NULL;
 	var_type res_type;
 
 	if (client_handle == NULL) {
@@ -622,33 +580,38 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		res_data = extra_args;
 	}
 
+
 	if (res_length > 0) {
-		res = malloc(sizeof(*res));
-		if (res == NULL) {
-			fprintf(stderr, "res memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
-		res->type = res_type;
-		res->length = res_length;
-		res->data = malloc(res_length);
-		if (res->data == NULL) {
-			fprintf(stderr, "res->data memory allocation failed\n");
-			exit(EXIT_FAILURE);
-		}
-		memcpy(res->data, res_data, res_length);
+		res = malloc_safe(sizeof(*res) * 2);
+		res[1] = malloc_safe(sizeof(**res));
+		res[1]->type = res_type;
+		res[1]->elements = 1;
+		res[1]->length = res_length;
+		res[1]->data = malloc_safe(res_length);
+		memcpy(res[1]->data, res_data, res_length);
+		arg_count = 2;
+	} else {
+		res = malloc_safe(sizeof(*res));
+		arg_count = 1;
 	}
+	res[0] = malloc_safe(sizeof(**res));
+	res[0]->type = INT;
+	res[0]->elements = 1;
+	res[0]->length = sizeof(int);
+	res[0]->data = malloc_safe(res[0]->length);
+	memcpy(res[0]->data, &cuda_result, res[0]->length);
+
 	*result = res;
 
 	if (extra_args != NULL)
 		free(extra_args);
 
-	return cuda_result;
+	return arg_count;
 }
 
 int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	CudaDeviceList *cuda_devs;
 	CudaDevice **cuda_devs_dev;
-	CUresult res = CUDA_SUCCESS;
 	int i, cuda_dev_count = 0;
 	cuda_device_node *pos, *free_list_p=free_list, *busy_list_p=busy_list;
 
@@ -662,17 +625,9 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	printf("Available CUDA devices: %d\n", cuda_dev_count);
 	
 	// Init variables
-	cuda_devs = malloc(sizeof(CudaDeviceList));
-	if (cuda_devs == NULL) {
-		fprintf(stderr, "cuda_devs memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_devs = malloc_safe(sizeof(CudaDeviceList));
 	cuda_device_list__init(cuda_devs);
-	cuda_devs_dev = malloc(sizeof(CudaDevice *) * cuda_dev_count);
-	if (cuda_devs_dev == NULL) {
-		fprintf(stderr, "cuda_devs_dev memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	cuda_devs_dev = malloc_safe(sizeof(CudaDevice *) * cuda_dev_count);
 
 	// Add devices
 	printf("Adding devices...\n");
@@ -680,11 +635,7 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	i = 0;
 	list_for_each_entry(pos, &free_list_p->node, node) {
 		printf("%d -> %s\n", i, pos->cuda_device_name);
-		cuda_devs_dev[i] = malloc(sizeof(CudaDevice));
-		if (cuda_devs_dev[i] == NULL) {
-			fprintf(stderr, "cuda_devs_dev[%d] memory allocation failed\n", i);
-			exit(EXIT_FAILURE);
-		}
+		cuda_devs_dev[i] = malloc_safe(sizeof(CudaDevice));
 		cuda_device__init(cuda_devs_dev[i]);
 		cuda_devs_dev[i]->is_busy = 0;
 		cuda_devs_dev[i]->name = pos->cuda_device_name;
@@ -696,11 +647,7 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	i = 0;
 	list_for_each_entry(pos, &busy_list_p->node, node){
 		printf("%d -> %s\n", i, pos->cuda_device_name);
-		cuda_devs_dev[i] = malloc(sizeof(CudaDevice));
-		if (cuda_devs_dev[i] == NULL) {
-			fprintf(stderr, "cuda_devs_dev[%d] memory allocation failed\n", i);
-			exit(EXIT_FAILURE);
-		}
+		cuda_devs_dev[i] = malloc_safe(sizeof(CudaDevice));
 		cuda_device__init(cuda_devs_dev[i]);
 		cuda_devs_dev[i]->is_busy = 1;
 		cuda_devs_dev[i]->name = pos->cuda_device_name;
@@ -714,57 +661,47 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list) {
 	return 0;
 }
 
-int pack_cuda_cmd_result(void **payload, void *result, int res_code) {
-	var *res = result;
+int pack_cuda_cmd(void **payload, var **args, size_t arg_count, int type) {
 	CudaCmd *cmd;
+	int i;
 
-	printf("Packing CUDA cmd result...\n");
-	
-	cmd = malloc(sizeof(CudaCmd));
-	if (cmd == NULL) {
-		fprintf(stderr, "cmd memory allocation failed\n");
-		exit(EXIT_FAILURE);
+	printf("Packing CUDA cmd...\n");
+
+	if (args == NULL) {
+		return -1;
 	}
+
+	cmd = malloc_safe(sizeof(CudaCmd));
 	cuda_cmd__init(cmd);
 
-	cmd->type = RESULT;
-	if (res != NULL) {
-		cmd->arg_count = 2;
-		switch (res->type) {
+	cmd->type = type;
+	cmd->arg_count = arg_count;
+
+	for (i = 0; i < arg_count; i++) {	
+		switch (args[i]->type) {
+			case INT:
+				cmd->n_int_args = args[i]->elements;
+				cmd->int_args = args[i]->data;
+				break;
 			case UINT:
-				cmd->n_uint_args = 1;
-				cmd->uint_args = malloc(sizeof(*(cmd->uint_args)) * cmd->n_uint_args);
-				if (cmd->uint_args == NULL) {
-					fprintf(stderr, "cmd->uint_args memory allocation failed\n");
-					exit(EXIT_FAILURE);
-				}
-				cmd->uint_args = res->data;
-				printf("result: %p\n", (void *)cmd->uint_args[0]);
+				cmd->n_uint_args = args[i]->elements;
+				cmd->uint_args = args[i]->data;
+				break;
+			case STRING:
+				cmd->n_str_args = args[i]->elements;
+				cmd->str_args = args[i]->data;
 				break;
 			case BYTES:
+				//cmd->n_extra_args = args[i]->elements;
 				cmd->n_extra_args = 1;
-				cmd->extra_args = malloc(sizeof(*(cmd->extra_args)) * cmd->n_extra_args);
-				if (cmd->extra_args == NULL) {
-					fprintf(stderr, "cmd->extra_args memory allocation failed\n");
-					exit(EXIT_FAILURE);
-				}
-				cmd->extra_args[0].data = res->data;
-				cmd->extra_args[0].len = res->length;
+				cmd->extra_args = malloc_safe(sizeof(*(cmd->extra_args)) * cmd->n_extra_args);
+				cmd->extra_args[0].data = args[i]->data;
+				cmd->extra_args[0].len = args[i]->length;
 				break;
 		}
-	} else {
-		cmd->arg_count = 1;
 	}
-	cmd->n_int_args = 1;
-	cmd->int_args = malloc(sizeof(*(cmd->int_args)) * cmd->n_int_args);
-	if (cmd->int_args == NULL) {
-		fprintf(stderr, "cmd->int_args memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
-	cmd->int_args[0] = res_code;
-
-	printf("res_code: %" PRId64 "\n", cmd->int_args[0]);
 
 	*payload = cmd;
 	return 0;
 }
+

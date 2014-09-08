@@ -78,11 +78,8 @@ uint32_t receive_message(void **enc_msg, int sock_fd) {
 	uint32_t msg_length;
 	int ret = 0;
 
-	buffer = malloc(sizeof(uint32_t));
-	if (!buffer) {
-		fprintf(stderr, "buffer memory allocation failed");
-		exit(EXIT_FAILURE);
-	}
+	buffer = malloc_safe(sizeof(uint32_t));
+	
 	// read message length
 	read_socket(sock_fd, buffer, sizeof(uint32_t));
 
@@ -90,10 +87,7 @@ uint32_t receive_message(void **enc_msg, int sock_fd) {
 	printf("Going to read a message of %u bytes...\n", msg_length);
 	
 	buffer = realloc(buffer, msg_length);
-	if (buffer == NULL) {	
-		fprintf(stderr, "buffer memory reallocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	
 	// read message
 	read_socket(sock_fd, buffer, msg_length);
 	
@@ -161,20 +155,12 @@ size_t encode_message(void **result, int msg_type, void *payload) {
 	}
 	
 	msg_length = cookie__get_packed_size(&message);
-	msg_buffer = malloc(msg_length);
-	if (msg_buffer == NULL) {
-		fprintf(stderr, "msg_buffer memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	msg_buffer = malloc_safe(msg_length);
 	cookie__pack(&message, msg_buffer);
 	msg_len_n = htonl(msg_length);
 	
 	buf_size = msg_length + sizeof(msg_len_n);
-	buffer = malloc(buf_size);
-	if (buffer == NULL) {
-		fprintf(stderr, "buffer memory allocation failed\n");
-		exit(EXIT_FAILURE);
-	}
+	buffer = malloc_safe(buf_size);
 	memcpy(buffer, &msg_len_n, sizeof(msg_len_n));
 	memcpy(buffer+sizeof(msg_len_n), msg_buffer, msg_length);
 

@@ -8,4 +8,6 @@ int main() {
 	cuDeviceGet(&device, 0);
 	//myCuFinish();
 	printf("test-cuda Done...\n");
+
+	return 0;
 }

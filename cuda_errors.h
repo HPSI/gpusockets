@@ -66,4 +66,3 @@ static const char *CUDA_RESULT_STRING[] = {
 
 #define CUDA_RESULT_STRING_ARR_SIZE \
 	(int) (sizeof(CUDA_RESULT_STRING)/sizeof(CUDA_RESULT_STRING[0]))
-

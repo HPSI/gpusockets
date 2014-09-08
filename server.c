@@ -62,7 +62,7 @@ int init_server(char *port, struct addrinfo *addr, void **free_list, void **busy
 }
 
 int main(int argc, char *argv[]) {
-	int server_sock_fd, client_sock_fd, msg_type, resp_type, res_code;
+	int server_sock_fd, client_sock_fd, msg_type, resp_type, arg_cnt;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
 	socklen_t s;
@@ -77,8 +77,8 @@ int main(int argc, char *argv[]) {
 	}
 	
 	if (argc == 1) {
-		printf("No port defined, using default %s\n", DEFAULT_PORT);
-		local_port = (char *) DEFAULT_PORT;
+		printf("No port defined, using default %s\n", SERVER_PORT);
+		local_port = (char *) SERVER_PORT;
 	} else {
 		local_port = argv[1];
 	}
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
 			printf("Processing message\n");
 			switch (msg_type) {
 				case CUDA_CMD: 
-					res_code = process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
+					arg_cnt = process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
 					resp_type = CUDA_CMD_RESULT;
 					break;
 				case CUDA_DEVICE_QUERY:
@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
 
 			if (resp_type != -1) {
 				printf("Sending result\n");
-				pack_cuda_cmd_result(&payload, result, res_code);
+				pack_cuda_cmd(&payload, result, arg_cnt, CUDA_CMD_RESULT);
 				msg_length = encode_message(&msg, resp_type, payload);
 				send_message(client_sock_fd, msg, msg_length);
 				

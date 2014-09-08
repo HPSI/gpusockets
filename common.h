@@ -16,17 +16,21 @@ typedef struct cookie_s {
 } cookie;
 */
 typedef enum var_type_e {
+	INT,
 	UINT,
+	STRING,
 	BYTES
 } var_type;
 
 typedef struct var_s {
 	var_type type;
 	uint32_t length;
+	uint32_t elements;
 	void *data;
 } var;
 
-#define DEFAULT_PORT "8888"
+#define SERVER_IP "localhost"
+#define SERVER_PORT "8888"
 
 enum {
 	CUDA_CMD=0,
@@ -47,5 +51,14 @@ enum {
 	MEMCPY_DEV_TO_HOST,
 	LAUNCH_KERNEL
 };
+
+inline void *malloc_safe_f(size_t size, const char *file, const int line); 
+#define malloc_safe(size) malloc_safe_f(size, __FILE__, __LINE__)
+
+inline void *realloc_safe_f(void *ptr, size_t size, const char *file, const int line); 
+#define realloc_safe(ptr, size) realloc_safe_f(ptr, size, __FILE__, __LINE__)
+
+inline void *calloc_safe_f(size_t nmemb, size_t size, const char *file, const int line); 
+#define calloc_safe(nmemb, size) calloc_safe_f(nmemb, size, __FILE__, __LINE__)
 
 #endif /* COMMON_H */
