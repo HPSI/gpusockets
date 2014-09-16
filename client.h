@@ -2,8 +2,23 @@
 #define CLIENT_H
 
 #include "common.h"
+#include "process.h"
 
-void get_server_connection(int *client_sock_fd, struct addrinfo *server_addr);
+typedef struct params_s {
+	int id;
+	int sock_fd;
+	struct addrinfo addr;
+	param_node *device;
+	param_node *context;
+	param_node *module;
+	param_node *function;
+	param_node *variable;
+} params;
+
+
+void init_params(params *p);
+
+void get_server_connection(params *p);
 
 int64_t get_cuda_cmd_result(void **result, int sock_fd);
 

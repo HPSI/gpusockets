@@ -126,6 +126,16 @@ void init_client_list(client_node **list) {
 	*list = empty_list;
 }
 
+void init_param_list(param_node **list) {
+	param_node *empty_list;
+
+	empty_list = malloc_safe(sizeof(param_node));
+
+	INIT_LIST_HEAD(&empty_list->node);
+
+	*list = empty_list;
+}
+
 void free_cdn_list(void *list) {
 	cuda_device_node *pos, *tmp, *cdn_list;
 	int i = 0;
@@ -234,10 +244,8 @@ int add_client_to_list(void **client_handle, void **client_list, int client_id) 
 	new_node = malloc_safe(sizeof(*new_node));
 
 	new_node->id = client_id;
-	new_node->cuda_dev_handle = NULL;
-	new_node->cuda_ctx_handle = NULL;
-	new_node->cuda_dev_handle = NULL;
-	new_node->cuda_fun_handle = NULL;
+	new_node->dev_count = 0;
+	new_node->cuda_dev_node = NULL;
 
 	printf("Adding client <%d> to list\n", client_id);
 	list_add_tail(&new_node->node, &client_list_p->node);
@@ -257,83 +265,121 @@ void print_clients(void *client_list) {
 	}
 }
 
+uint32_t add_param_to_list(param_node **list, uint64_t uintptr) {
+	uint32_t param_id = 0;
+	param_node *new_node, *tmp;
+	
+	if (*list == NULL)
+		init_param_list(list);
+	else {
+		// TODO: (?) generate unique random id
+		tmp = list_last_entry(&((*list)->node), param_node, node);
+		param_id = tmp->id + 1;
+	}
+
+	new_node = malloc_safe(sizeof(*new_node));
+	new_node->id = param_id;
+	new_node->ptr = uintptr;
+
+	list_add_tail(&new_node->node, &((*list)->node));
+
+	return param_id;
+}
+
 int update_device_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, int dev_ordinal, client_node *client) {
 	cuda_device_node *tmp;
-	int i = 0;
+	int i = 0, true_ordinal;
 
 	// TODO: support more than one devices per client.
-	printf("Updating device of client <%d> ... ", client->id);
+	printf("Updating devices of client <%d>...\n", client->id);
 
 	tmp = list_first_entry_or_null(&free_list->node, cuda_device_node, node);
 	if (tmp == NULL) {
 		fprintf(stderr, "No CUDA devices available for assignment\n");
 		return -1;
 	}
-	while (i++ < dev_ordinal) {
+	true_ordinal = dev_ordinal - client->dev_count;
+	while (i++ < true_ordinal) {
 		tmp = list_next_entry(tmp, node);
 		if (&tmp->node == &free_list->node) {
 			fprintf(stderr, "No CUDA devices available for assignment with the desired ordinal\n");
 			return -1;
 		}
 	}
-
-	client->cuda_dev_node = tmp;
+	
 	*dev_ptr = (uintptr_t) tmp->cuda_device;
-
-	printf("updated to <%s>@%p\n", tmp->cuda_device_name, tmp->cuda_device);
+	// TODO: What if client deviceGets the same ordinal twice?
+	add_param_to_list(&client->cuda_dev_node, (uintptr_t) tmp);
 
 	return 0;
 }
 
-int assign_device_to_client(cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
-	cuda_device_node *device_n;
+int assign_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
+	cuda_device_node *dev_node;
+	param_node *pos;
+	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 
-	device_n = client->cuda_dev_node;
-	printf("Assigning device <%s>@%p to client <%d> ...\n", device_n->cuda_device_name, device_n->cuda_device, client->id);
+	printf("Assigning device @%p to client <%d> ...\n", cuda_device, client->id);
 
-	if (device_n->is_busy == 1) {
-		fprintf(stderr, "Requested CUDA device is busy\n");
-		return -1;
+	list_for_each_entry(pos, &client->cuda_dev_node->node, node) {
+		dev_node = (cuda_device_node *) pos->ptr;
+		if (dev_node->cuda_device == cuda_device) {
+			if (dev_node->is_busy == 1) {
+				fprintf(stderr, "Requested CUDA device is busy\n");
+				return -2;
+			}
+			printf("Moving device <%s>@%p to busy list\n",
+					dev_node->cuda_device_name, dev_node->cuda_device);
+			dev_node->is_busy = 1;
+			list_move_tail(&dev_node->node, &busy_list->node);
+			++client->dev_count;
+
+			return 0;
+		}	
+	}
+	
+	fprintf(stderr, "Requested CUDA device not in client's list!\n");	
+	return -1;
+}
+
+int free_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
+	cuda_device_node *dev_node;
+	param_node *pos;
+	CUdevice *cuda_device = (CUdevice *) dev_ptr;
+	
+	// FIXME: dev_ptr should be of CUdevice type...
+	printf("Freeing device @%p from client <%d>...\n", cuda_device, client->id);
+	
+	list_for_each_entry(pos, &client->cuda_dev_node->node, node) {
+		dev_node = (cuda_device_node *) pos->ptr;
+		if (dev_node->cuda_device == cuda_device) {
+			printf("Moving device <%s>@%p to free list\n",
+					dev_node->cuda_device_name, dev_node->cuda_device);
+			dev_node->is_busy = 0;
+			list_move_tail(&dev_node->node, &free_list->node);
+			--client->dev_count;
+
+			return 0;
+		}	
 	}
 
-
-	printf("Moving device <%s>@%p to busy list ... ", device_n->cuda_device_name, device_n->cuda_device);
-	device_n->is_busy = 1;
-	list_move_tail(&device_n->node, &busy_list->node);
-
-	client->cuda_dev_handle = device_n->cuda_device;
-	printf("Done\n");	
-
-	return 0;
+	fprintf(stderr, "Requested CUDA device not in client's list!\n");	
+	return -1;
 }
 
-int free_device_from_client(cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
-	cuda_device_node *device_n;
-
-	device_n = client->cuda_dev_node;
-	printf("Freeing device <%s>@%p from client <%d> ... ", device_n->cuda_device_name, device_n->cuda_device, client->id);
-
-	list_move_tail(&device_n->node, &free_list->node);
-	device_n->is_busy = 0;
-	printf("Done\n");
-
-	return 0;
-}
-
-int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, client_node *client) {
+int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, uintptr_t dev_ptr, client_node *client) {
 	CUcontext *cuda_context;
+	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 	CUresult res = 0;
 
 	cuda_context = malloc_safe(sizeof(CUcontext));
 
 	// TODO: support more than one contexts per client.
 	printf("Creating CUDA context of client <%d> ... ", client->id);
-	printf("\n%p\n", client->cuda_dev_handle);
 
-	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *(client->cuda_dev_handle)), 0);
+	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *cuda_device), 0);
 
 	if (res == CUDA_SUCCESS) {
-		client->cuda_ctx_handle = cuda_context;
 		*ctx_ptr = (uintptr_t) cuda_context;
 		printf("created @%p ... Done\n", cuda_context);
 	} else {
@@ -343,19 +389,14 @@ int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, client_node
 	return res;
 }
 
-int destroy_context_of_client(client_node *client) {
+int destroy_context_of_client(uintptr_t ctx_ptr, client_node *client) {
 	CUresult res = 0;
+	CUcontext *cuda_context = (CUcontext *) ctx_ptr;
 
 	// TODO: free modules/functions allocated handles (?)	
-	printf("Destroying CUDA context of client <%d> ... ", client->id);
+	printf("Destroying CUDA context @%p of client <%d> ...\n", cuda_context, client->id);
 	
-	if (client->cuda_ctx_handle != NULL) 
-		res = cuda_err_print(cuCtxDestroy(*(client->cuda_ctx_handle)), 0);
-
-	if (res == CUDA_SUCCESS)
-		client->cuda_ctx_handle = NULL;
-
-	printf("client handle now @%p ... Done\n", client->cuda_ctx_handle);
+	res = cuda_err_print(cuCtxDestroy(*cuda_context), 0);
 
 	return res;
 }
@@ -371,30 +412,26 @@ int load_module_of_client(uintptr_t *mod_ptr, ProtobufCBinaryData *image, client
 
 	res = cuda_err_print(cuModuleLoadData(cuda_module, image->data), 0);
 
-	if (res == CUDA_SUCCESS) {
-		client->cuda_mod_handle = cuda_module;
+	if (res == CUDA_SUCCESS)
 		*mod_ptr = (uintptr_t) cuda_module;
-	}
 
 	return res;
 }
 
-int get_module_function_of_client(uintptr_t *fun_ptr, char *func_name, client_node *client) {
+int get_module_function_of_client(uintptr_t *fun_ptr, uintptr_t mod_ptr, char *func_name, client_node *client) {
 	CUresult res;
 	CUfunction *cuda_func;
+	CUmodule *cuda_module = (CUmodule *) mod_ptr;
 
 	// TODO: support more than one functions per client.	
 	printf("Loading CUDA module function of client <%d> ... ", client->id);
 
 	cuda_func = malloc_safe(sizeof(*cuda_func));
 
-	res = cuda_err_print(cuModuleGetFunction(cuda_func,
-				*(client->cuda_mod_handle), func_name), 0);
+	res = cuda_err_print(cuModuleGetFunction(cuda_func, *cuda_module, func_name), 0);
 
-	if (res == CUDA_SUCCESS) {
-		client->cuda_fun_handle = cuda_func;
+	if (res == CUDA_SUCCESS)
 		*fun_ptr = (uintptr_t) cuda_func;
-	}
 
 	return res;
 }
@@ -526,18 +563,18 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case CONTEXT_CREATE:
 			printf("Executing cuCtxCreate...\n");
-			if(assign_device_to_client(free_list, busy_list, client_handle) < 0) {
-				// TODO: Device was busy, give appropriate response to client.
-				cuda_result = -2;
+			cuda_result = assign_device_to_client(cmd->uint_args[1], free_list, busy_list, client_handle);
+			if (cuda_result	< 0) {
+				// TODO: Handle appropriately in client.
 				break;
 			}
-			cuda_result = create_context_of_client(&id_ptr, cmd->uint_args[0], client_handle);
-
+			cuda_result = create_context_of_client(&id_ptr, cmd->uint_args[0], cmd->uint_args[1], client_handle);
 			break;
 		case CONTEXT_DESTROY:
 			printf("Executing cuCtxDestroy...\n");
-			cuda_result = destroy_context_of_client(client_handle);
-			free_device_from_client(free_list, busy_list, client_handle);
+			cuda_result = destroy_context_of_client(cmd->uint_args[0], client_handle);
+			if (cuda_result != CUDA_SUCCESS)
+				free_device_from_client(cmd->uint_args[0], free_list, busy_list, client_handle);
 			break;
 		case MODULE_LOAD:
 			printf("Executing cuModuleLoad...\n");
@@ -546,7 +583,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case MODULE_GET_FUNCTION:
 			printf("Executing cuModuleGetFuction...\n");
-			cuda_result = get_module_function_of_client(&id_ptr, cmd->str_args[0], client_handle);
+			cuda_result = get_module_function_of_client(&id_ptr, cmd->uint_args[0], cmd->str_args[0], client_handle);
 			break;
 		case MEMORY_ALLOCATE:
 			printf("Executing cuMemAlloc...\n");

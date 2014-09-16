@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 	char *server_port;
 	struct addrinfo server_addr;
 	char *server_ip, *a = "Hello", *b = "world";
-	uint64_t func_ptr, ptr1, ptr2, ptr3;
+	uint64_t dev_ptr, ctx_ptr, mod_ptr, func_ptr, ptr1, ptr2, ptr3;
 	CudaCmd cmd1 = CUDA_CMD__INIT, cmd2 = CUDA_CMD__INIT,
 			cmd3 = CUDA_CMD__INIT, cmd4 = CUDA_CMD__INIT,
 			cmd5 = CUDA_CMD__INIT, cmd6 = CUDA_CMD__INIT,
@@ -160,19 +160,19 @@ int main(int argc, char *argv[]) {
 
 	/**
 	 * cmd1
-	 **/	
-	// build message payload
+	 **/
+	printf("* DEVICE_GET\n");
 	cmd1.type = DEVICE_GET;
 	cmd1.arg_count = 1;
 	cmd1.n_int_args = 1;
 	cmd1.int_args = malloc_safe(sizeof(*(cmd1.int_args)) * cmd1.n_int_args);
 	cmd1.int_args[0] = 0;
 	/*
-	cmd1.int_args[1] = 2;
-	cmd1.n_str_args = 2;
-	cmd1.str_args = malloc_safe(sizeof(char *) * cmd1.n_str_args);
-	cmd1.str_args[0] = a;
-	cmd1.str_args[1] = b;
+	  cmd1.int_args[1] = 2;
+	  cmd1.n_str_args = 2;
+	  cmd1.str_args = malloc_safe(sizeof(char *) * cmd1.n_str_args);
+	  cmd1.str_args[0] = a;
+	  cmd1.str_args[1] = b;
 	*/
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd1);
 	send_message(client_sock_fd, buffer, buf_size);
@@ -180,24 +180,27 @@ int main(int argc, char *argv[]) {
 	free(cmd1.int_args);
 	free(buffer);	
 	get_cuda_cmd_result(&result, client_sock_fd);
+	dev_ptr = *(uint64_t *) result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
 
 	/**
 	 * cmd2
-	 **/	
+	 **/
+	printf("* CONTEXT_CREATE\n");
 	cmd2.type = CONTEXT_CREATE;
-	cmd2.arg_count = 1;
-	cmd2.n_uint_args = 1;
+	cmd2.arg_count = 2;
+	cmd2.n_uint_args = 2;
 	cmd2.uint_args = malloc_safe(sizeof(*(cmd2.uint_args)) * cmd2.n_uint_args);
 	cmd2.uint_args[0] = 0;
+	cmd2.uint_args[1] = dev_ptr;
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd2);
 	send_message(client_sock_fd, buffer, buf_size);
 
 	free(cmd2.uint_args);
-	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
+	ctx_ptr = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
@@ -205,13 +208,14 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd3
 	 **/	
+	printf("* MODULE_LOAD\n");
 	cmd3.type = MODULE_LOAD;
 	cmd3.arg_count = 1;
 	cmd3.n_extra_args = 1;
 	cmd3.extra_args = malloc_safe(sizeof(*(cmd3.extra_args)) * cmd3.n_extra_args);
 
 	file_size = read_cuda_module_file(&file, "matSumKernel.ptx");
-	
+
 	cmd3.extra_args[0].data = file;
 	cmd3.extra_args[0].len = file_size;
 	//print_file_as_hex(cmd3.extra_args[0].data, cmd3.extra_args[0].len);
@@ -223,6 +227,7 @@ int main(int argc, char *argv[]) {
 	free(cmd3.extra_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
+	mod_ptr = *(uint64_t *) result;
 	// --
 	close(client_sock_fd);
 	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
@@ -230,8 +235,12 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd4
 	 **/	
+	printf("* MODULE_GET_FUNCTION\n");
 	cmd4.type = MODULE_GET_FUNCTION;
-	cmd4.arg_count = 1;
+	cmd4.arg_count = 2;
+	cmd4.n_uint_args = 1;
+	cmd4.uint_args = malloc_safe(sizeof(*(cmd4.uint_args)) * cmd4.n_uint_args);
+	cmd4.uint_args[0] = mod_ptr;
 	cmd4.n_str_args = 1;
 	cmd4.str_args = malloc_safe(sizeof(char *) * cmd4.n_str_args);
 	cmd4.str_args[0] = "matSum";
@@ -239,6 +248,7 @@ int main(int argc, char *argv[]) {
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd4);
 	send_message(client_sock_fd, buffer, buf_size);
 
+	free(cmd4.uint_args);
 	free(cmd4.str_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
@@ -250,6 +260,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd5
 	 **/	
+	printf("* MEMORY_ALLOCATE 1\n");
 	cmd5.type = MEMORY_ALLOCATE;
 	cmd5.arg_count = 1;
 	cmd5.n_uint_args =1;
@@ -270,6 +281,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd6
 	 **/	
+	printf("* MEMORY_ALLOCATE 2\n");
 	cmd6.type = MEMORY_ALLOCATE;
 	cmd6.arg_count = 1;
 	cmd6.n_uint_args =1;
@@ -290,6 +302,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd7
 	 **/	
+	printf("* MEMORY_ALLOCATE 3\n");
 	cmd7.type = MEMORY_ALLOCATE;
 	cmd7.arg_count = 1;
 	cmd7.n_uint_args =1;
@@ -310,13 +323,14 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd8
 	 **/	
+	printf("* MEMCPY_HOST_TO_DEV 1\n");
 	cmd8.type = MEMCPY_HOST_TO_DEV;
 	cmd8.arg_count = 2;
 	cmd8.n_extra_args = 1;
 	cmd8.extra_args = malloc_safe(sizeof(*(cmd8.extra_args)) * cmd8.n_extra_args);
 	cmd8.extra_args[0].data = (void *)&test_arg;
 	cmd8.extra_args[0].len = sizeof(int);
-	
+
 	cmd8.n_uint_args =1;
 	cmd8.uint_args = malloc_safe(sizeof(*(cmd8.uint_args)) * cmd8.n_uint_args);
 	cmd8.uint_args[0] = ptr1;
@@ -335,13 +349,14 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd9
 	 **/	
+	printf("* MEMCPY_HOST_TO_DEV 2\n");
 	cmd9.type = MEMCPY_HOST_TO_DEV;
 	cmd9.arg_count = 2;
 	cmd9.n_extra_args = 1;
 	cmd9.extra_args = malloc_safe(sizeof(*(cmd9.extra_args)) * cmd9.n_extra_args);
 	cmd9.extra_args[0].data = (void *)&test_arg;
 	cmd9.extra_args[0].len = sizeof(int);
-	
+
 	cmd9.n_uint_args =1;
 	cmd9.uint_args = malloc_safe(sizeof(*(cmd9.uint_args)) * cmd9.n_uint_args);
 	cmd9.uint_args[0] = ptr2;
@@ -360,6 +375,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd10
 	 **/	
+	printf("* LAUNCH_KERNEL\n");
 	cmd10.type = LAUNCH_KERNEL;
 	cmd10.arg_count = 12;
 	cmd10.n_uint_args = 12;
@@ -382,7 +398,7 @@ int main(int argc, char *argv[]) {
 	cmd10.uint_args[9] = ptr1;
 	cmd10.uint_args[10] = ptr2;
 	cmd10.uint_args[11] = ptr3;
-	
+
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd10);
 	send_message(client_sock_fd, buffer, buf_size);
 
@@ -396,6 +412,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd11
 	 **/	
+	printf("* MEMCPY_DEV_TO_HOST\n");
 	cmd11.type = MEMCPY_DEV_TO_HOST;
 	cmd11.arg_count = 2;
 	cmd11.n_uint_args = 2;
@@ -418,6 +435,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd12
 	 **/	
+	printf("* MEMORY_FREE 1\n");
 	cmd12.type = MEMORY_FREE;
 	cmd12.arg_count = 1;
 	cmd12.n_uint_args =1;
@@ -437,6 +455,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd13
 	 **/	
+	printf("* MEMORY_FREE 2\n");
 	cmd13.type = MEMORY_FREE;
 	cmd13.arg_count = 1;
 	cmd13.n_uint_args =1;
@@ -456,6 +475,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd14
 	 **/	
+	printf("* MEMORY_FREE 3\n");
 	cmd14.type = MEMORY_FREE;
 	cmd14.arg_count = 1;
 	cmd14.n_uint_args =1;
@@ -475,11 +495,17 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd15
 	 **/	
+	printf("* CONTEXT_DESTROY\n");
 	cmd15.type = CONTEXT_DESTROY;
-	cmd15.arg_count = 0;
+	cmd15.arg_count = 1;
+	cmd15.n_uint_args = 1;
+	cmd15.uint_args = malloc_safe(sizeof(*(cmd15.uint_args)) * cmd15.n_uint_args);
+	cmd15.uint_args[0] = ctx_ptr;
+
 	buf_size = encode_message(&buffer, CUDA_CMD, &cmd15);
 	send_message(client_sock_fd, buffer, buf_size);
 
+	free(cmd15.uint_args);
 	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
 	//get_available_gpus(client_sock_fd);

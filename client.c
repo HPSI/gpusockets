@@ -46,11 +46,20 @@ int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr) {
 	return socket_fd;
 }
 
-void get_server_connection(int *client_sock_fd, struct addrinfo *server_addr) {
+void init_params(params *p) {
+	p->id = -1;
+	p->device = NULL;
+	p->context = NULL;
+	p->module = NULL;
+	p->function = NULL;
+	p->variable = NULL;
+}
+
+void get_server_connection(params *p) {
 	
-	if (*client_sock_fd < 0) {
-		*client_sock_fd = init_client(SERVER_IP, SERVER_PORT, server_addr);	
-	printf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
+	if (p->id < 0) {
+		p->sock_fd = init_client(SERVER_IP, SERVER_PORT, &(p->addr));	
+		printf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
 	}
 
 }
