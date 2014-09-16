@@ -286,6 +286,32 @@ uint32_t add_param_to_list(param_node **list, uint64_t uintptr) {
 	return param_id;
 }
 
+uint64_t get_param_from_list(param_node *list, uint32_t param_id) {
+	param_node *pos;
+	
+	list_for_each_entry(pos, &list->node, node) {
+		if (pos->id == param_id)
+			return pos->ptr;
+	}
+
+	fprintf(stderr, "Requested CUDA device not in client's list!\n");	
+	return 0;
+}
+
+int remove_param_from_list(param_node *list, uint32_t param_id) {
+	param_node *pos;
+	
+	list_for_each_entry(pos, &list->node, node) {
+		if (pos->id == param_id) {
+			list_del(&list->node);
+			return 0;
+		}
+	}
+
+	fprintf(stderr, "Requested CUDA device not in client's list!\n");	
+	return -1;
+}
+
 int update_device_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, int dev_ordinal, client_node *client) {
 	cuda_device_node *tmp;
 	int i = 0, true_ordinal;
@@ -347,7 +373,6 @@ int free_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 	param_node *pos;
 	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 	
-	// FIXME: dev_ptr should be of CUdevice type...
 	printf("Freeing device @%p from client <%d>...\n", cuda_device, client->id);
 	
 	list_for_each_entry(pos, &client->cuda_dev_node->node, node) {

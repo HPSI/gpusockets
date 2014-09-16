@@ -57,6 +57,7 @@ void init_params(params *p) {
 
 void get_server_connection(params *p) {
 	
+	// TODO: get id from server
 	if (p->id < 0) {
 		p->sock_fd = init_client(SERVER_IP, SERVER_PORT, &(p->addr));	
 		printf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
@@ -141,7 +142,6 @@ int get_available_gpus(int sock_fd) {
 int send_cuda_cmd(int sock_fd, var **args, size_t arg_count, int type) {
 	void *buffer = NULL, *payload = NULL;
 	size_t buf_size;
-	int msg_type;
 
 	printf("Sendind CUDA cmd...\n");
 	pack_cuda_cmd(&payload, args, arg_count, type);	

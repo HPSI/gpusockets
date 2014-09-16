@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd1
 	 **/
-	printf("* DEVICE_GET\n");
+	printf("\n* DEVICE_GET\n");
 	cmd1.type = DEVICE_GET;
 	cmd1.arg_count = 1;
 	cmd1.n_int_args = 1;
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd2
 	 **/
-	printf("* CONTEXT_CREATE\n");
+	printf("\n* CONTEXT_CREATE\n");
 	cmd2.type = CONTEXT_CREATE;
 	cmd2.arg_count = 2;
 	cmd2.n_uint_args = 2;
@@ -208,7 +208,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd3
 	 **/	
-	printf("* MODULE_LOAD\n");
+	printf("\n* MODULE_LOAD\n");
 	cmd3.type = MODULE_LOAD;
 	cmd3.arg_count = 1;
 	cmd3.n_extra_args = 1;
@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd4
 	 **/	
-	printf("* MODULE_GET_FUNCTION\n");
+	printf("\n* MODULE_GET_FUNCTION\n");
 	cmd4.type = MODULE_GET_FUNCTION;
 	cmd4.arg_count = 2;
 	cmd4.n_uint_args = 1;
@@ -260,7 +260,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd5
 	 **/	
-	printf("* MEMORY_ALLOCATE 1\n");
+	printf("\n* MEMORY_ALLOCATE 1\n");
 	cmd5.type = MEMORY_ALLOCATE;
 	cmd5.arg_count = 1;
 	cmd5.n_uint_args =1;
@@ -281,7 +281,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd6
 	 **/	
-	printf("* MEMORY_ALLOCATE 2\n");
+	printf("\n* MEMORY_ALLOCATE 2\n");
 	cmd6.type = MEMORY_ALLOCATE;
 	cmd6.arg_count = 1;
 	cmd6.n_uint_args =1;
@@ -302,7 +302,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd7
 	 **/	
-	printf("* MEMORY_ALLOCATE 3\n");
+	printf("\n* MEMORY_ALLOCATE 3\n");
 	cmd7.type = MEMORY_ALLOCATE;
 	cmd7.arg_count = 1;
 	cmd7.n_uint_args =1;
@@ -323,7 +323,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd8
 	 **/	
-	printf("* MEMCPY_HOST_TO_DEV 1\n");
+	printf("\n* MEMCPY_HOST_TO_DEV 1\n");
 	cmd8.type = MEMCPY_HOST_TO_DEV;
 	cmd8.arg_count = 2;
 	cmd8.n_extra_args = 1;
@@ -349,7 +349,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd9
 	 **/	
-	printf("* MEMCPY_HOST_TO_DEV 2\n");
+	printf("\n* MEMCPY_HOST_TO_DEV 2\n");
 	cmd9.type = MEMCPY_HOST_TO_DEV;
 	cmd9.arg_count = 2;
 	cmd9.n_extra_args = 1;
@@ -375,7 +375,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd10
 	 **/	
-	printf("* LAUNCH_KERNEL\n");
+	printf("\n* LAUNCH_KERNEL\n");
 	cmd10.type = LAUNCH_KERNEL;
 	cmd10.arg_count = 12;
 	cmd10.n_uint_args = 12;
@@ -412,7 +412,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd11
 	 **/	
-	printf("* MEMCPY_DEV_TO_HOST\n");
+	printf("\n* MEMCPY_DEV_TO_HOST\n");
 	cmd11.type = MEMCPY_DEV_TO_HOST;
 	cmd11.arg_count = 2;
 	cmd11.n_uint_args = 2;
@@ -435,7 +435,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd12
 	 **/	
-	printf("* MEMORY_FREE 1\n");
+	printf("\n* MEMORY_FREE 1\n");
 	cmd12.type = MEMORY_FREE;
 	cmd12.arg_count = 1;
 	cmd12.n_uint_args =1;
@@ -455,7 +455,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd13
 	 **/	
-	printf("* MEMORY_FREE 2\n");
+	printf("\n* MEMORY_FREE 2\n");
 	cmd13.type = MEMORY_FREE;
 	cmd13.arg_count = 1;
 	cmd13.n_uint_args =1;
@@ -475,7 +475,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd14
 	 **/	
-	printf("* MEMORY_FREE 3\n");
+	printf("\n* MEMORY_FREE 3\n");
 	cmd14.type = MEMORY_FREE;
 	cmd14.arg_count = 1;
 	cmd14.n_uint_args =1;
@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
 	/**
 	 * cmd15
 	 **/	
-	printf("* CONTEXT_DESTROY\n");
+	printf("\n* CONTEXT_DESTROY\n");
 	cmd15.type = CONTEXT_DESTROY;
 	cmd15.arg_count = 1;
 	cmd15.n_uint_args = 1;

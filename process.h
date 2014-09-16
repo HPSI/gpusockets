@@ -40,6 +40,10 @@ void print_clients(void *client_list);
 
 uint32_t add_param_to_list(param_node **list, uint64_t uintptr);
 
+uint64_t get_param_from_list(param_node *list, uint32_t param_id);
+
+int remove_param_from_list(param_node *list, uint32_t param_id);
+
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_list);
 
 int process_cuda_device_query(void **result, void *free_list, void *busy_list);
