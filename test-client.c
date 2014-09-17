@@ -17,7 +17,7 @@ int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;	// Allow IPv4
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = 0;	// For wildcard IP address

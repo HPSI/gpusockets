@@ -52,9 +52,10 @@ CUresult cuDeviceGet(CUdevice *device, int ordinal) {
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
 		param_id = add_param_to_list(&c_params.device, *(uint64_t *) result);
-		memcpy(device, &param_id, sizeof(param_id));
+		memcpy(device, &param_id, sizeof(param_id));	
+		free(result);	
 	}
-	
+
 	// for testing
 	close(c_params.sock_fd);
 	// --
@@ -78,21 +79,22 @@ CUresult cuCtxCreate(CUcontext* pctx, unsigned int flags, CUdevice dev) {
 	arg.type = UINT;
 	arg.length = sizeof(uint64_t) * arg.elements;
 	arg.data = malloc_safe(arg.length);
-	bzero(arg.data, arg.length);
-	memcpy(arg.data, &flags, sizeof(uint64_t));
+	memset(arg.data, 0, arg.length);
+	memcpy(arg.data, &flags, sizeof(flags));
 	memcpy(&param_id, &dev, sizeof(uint32_t));
 	param = get_param_from_list(c_params.device, param_id);
-	memcpy(arg.data+sizeof(uint64_t), &param, sizeof(uint32_t));
+	memcpy(arg.data+sizeof(uint64_t), &param, sizeof(param));
 	if (send_cuda_cmd(c_params.sock_fd, args, 1, CONTEXT_CREATE) == -1) {
 		fprintf(stderr, "Problem sending CUDA cmd!\n");
 		exit(EXIT_FAILURE);
 	}
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
-	if (res_code == CUDA_SUCCESS)
+	if (res_code == CUDA_SUCCESS) {
 		param_id = add_param_to_list(&c_params.context, *(uint64_t *) result);
-	
-	memcpy(pctx, &param_id, sizeof(param_id));
+		memcpy(pctx, &param_id, sizeof(param_id));
+		free(result);	
+	}
 
 	// for testing
 	close(c_params.sock_fd);
@@ -118,23 +120,22 @@ CUresult cuCtxDestroy(CUcontext ctx) {
 	// - Free lists etc. 
 	// - Send finshed message if CtxDestroy is the last.
 	arg.type = UINT;
-	arg.length = sizeof(uint64_t) * arg.elements;
-	arg.data = malloc_safe(arg.length);
-	bzero(arg.data, arg.length);
+	arg.length = sizeof(uint64_t);
 	memcpy(&param_id, &ctx, sizeof(uint32_t));
 	param = get_param_from_list(c_params.context, param_id);
-	memcpy(arg.data, &param, sizeof(uint32_t));
+	arg.data = &param;
 	if (send_cuda_cmd(c_params.sock_fd, args, 1, CONTEXT_DESTROY) == -1) {
 		fprintf(stderr, "Problem sending CUDA cmd!\n");
 		exit(EXIT_FAILURE);
 	}
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
-	if (res_code == CUDA_SUCCESS)
+	if (res_code == CUDA_SUCCESS) {
 		remove_param_from_list(c_params.context, param_id);
-
-	param_id = 0;	
-	memcpy(&ctx, &param_id, sizeof(param_id));
+		param_id = 0;	
+		memcpy(&ctx, &param_id, sizeof(param_id));
+		free(result);	
+	}
 
 	// for testing
 	close(c_params.sock_fd);
@@ -168,6 +169,7 @@ CUresult cuModuleLoad(CUmodule *module, const char *fname) {
 	if (res_code == CUDA_SUCCESS) {
 		param_id = add_param_to_list(&c_params.module, *(uint64_t *) result);
 		memcpy(module, &param_id, sizeof(param_id));
+		free(result);	
 	}
 
 	// for testing
@@ -193,12 +195,10 @@ CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod, const char* name)
 	get_server_connection(&c_params);
 
 	arg_uint.type = UINT;
-	arg_uint.length = sizeof(uint64_t) * arg_uint.elements;
-	arg_uint.data = malloc_safe(arg_uint.length);
-	bzero(arg_uint.data, arg_uint.length);
+	arg_uint.length = sizeof(uint64_t);
 	memcpy(&param_id, &hmod, sizeof(uint32_t));
 	param = get_param_from_list(c_params.module, param_id);
-	memcpy(arg_uint.data, &param, sizeof(uint32_t));
+	arg_uint.data = &param;
 
 	arg_str.type = STRING;
 	arg_str.length = sizeof(char *);
@@ -213,11 +213,169 @@ CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod, const char* name)
 	if (res_code == CUDA_SUCCESS) {
 		param_id = add_param_to_list(&c_params.function, *(uint64_t *) result);
 		memcpy(hfunc, &param_id, sizeof(param_id));
+		free(result);	
 	}
 
 	// for testing
 	close(c_params.sock_fd);
 	// --
 
-	return res_code; // cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod, const char* name);
+	return res_code; // cuModuleGetFunction_real(CUfunction* hfunc, CUmodule hmod, const char* name);
 }
+
+CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize) {
+	static CUresult (*cuMemAlloc_real) (CUdeviceptr *dptr, size_t bytesize) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg = { .elements = 1 }, *args[] = { &arg };
+	uint32_t param_id;
+	uint64_t param;
+
+	if (cuMemAlloc_real == NULL)
+		cuMemAlloc_real = dlsym(RTLD_NEXT, "cuMemAlloc");
+
+	get_server_connection(&c_params);
+
+	arg.type = UINT;
+	arg.length = sizeof(uint64_t);
+	arg.data = &bytesize;
+
+	if (send_cuda_cmd(c_params.sock_fd, args, 1, MEMORY_ALLOCATE) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		param_id = add_param_to_list(&c_params.variable, *(uint64_t *) result);
+		memcpy(dptr, &param_id, sizeof(param_id));
+		free(result);	
+	}
+
+	// for testing
+	close(c_params.sock_fd);
+	// --
+
+	return res_code; // cuMemAlloc_real(CUdeviceptr *dptr, size_t bytesize);
+}
+
+CUresult cuMemFree(CUdeviceptr dptr) {
+	static CUresult (*cuMemFree_real) (CUdeviceptr dptr) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg = { .elements = 1 }, *args[] = { &arg };
+	uint32_t param_id;
+	uint64_t param;
+
+	if (cuMemFree_real == NULL)
+		cuMemFree_real = dlsym(RTLD_NEXT, "cuMemFree");
+
+	get_server_connection(&c_params);
+
+	arg.type = UINT;
+	arg.length = sizeof(uint64_t);
+	memcpy(&param_id, &dptr, sizeof(uint32_t));
+	param = get_param_from_list(c_params.variable, param_id);
+	arg.data = &param;
+
+	if (send_cuda_cmd(c_params.sock_fd, args, 1, MEMORY_FREE) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		remove_param_from_list(c_params.variable, param_id);
+		param_id = 0;	
+		memcpy(&dptr, &param_id, sizeof(param_id));
+		free(result);	
+	}
+
+	// for testing
+	close(c_params.sock_fd);
+	// --
+
+	return res_code; // cuMemFree_real(CUdeviceptr dptr);
+}
+
+CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount) {
+	static CUresult (*cuMemcpyHtoD_real)
+		(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg_uint = { .elements = 1 }, arg_b = { .elements = 1 },
+		*args[] = { &arg_uint, &arg_b };
+	uint32_t param_id;
+	uint64_t param;
+
+	if (cuMemcpyHtoD_real == NULL)
+		cuMemcpyHtoD_real = dlsym(RTLD_NEXT, "cuMemcpyHtoD");
+
+	get_server_connection(&c_params);
+
+	arg_uint.type = UINT;
+	arg_uint.length = sizeof(uint64_t);
+	memcpy(&param_id, &dstDevice, sizeof(uint32_t));
+	param = get_param_from_list(c_params.variable, param_id);
+	arg_uint.data = &param;
+
+	arg_b.type = BYTES;
+	arg_b.length = ByteCount;
+	arg_b.data = srcHost;
+
+	if (send_cuda_cmd(c_params.sock_fd, args, 2, MEMCPY_HOST_TO_DEV) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+
+	if (result != NULL)
+		free(result);	
+
+	// for testing
+	close(c_params.sock_fd);
+	// --
+
+	return res_code; // cuMemcpyHtoD_real(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount);
+}
+
+CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) {
+	static CUresult (*cuMemcpyDtoH_real)
+		(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg = { .elements = 2 }, *args[] = { &arg };
+	uint32_t param_id;
+	uint64_t param;
+
+	if (cuMemcpyDtoH_real == NULL)
+		cuMemcpyDtoH_real = dlsym(RTLD_NEXT, "cuMemcpyDtoH");
+
+	get_server_connection(&c_params);
+	
+	arg.type = UINT;
+	arg.length = sizeof(uint64_t) * arg.elements;
+	arg.data = malloc_safe(arg.length);
+	memset(arg.data, 0, arg.length);
+	memcpy(&param_id, &srcDevice, sizeof(uint32_t));
+	param = get_param_from_list(c_params.variable, param_id);
+	memcpy(arg.data, &param, sizeof(param));
+	memcpy(arg.data+sizeof(uint64_t), &ByteCount, sizeof(ByteCount));
+	if (send_cuda_cmd(c_params.sock_fd, args, 1, MEMCPY_DEV_TO_HOST) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		dstHost = result;
+	}
+
+	// for testing
+	close(c_params.sock_fd);
+	// --
+
+	return res_code; // cuMemcpyDtoH_real(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount);
+}
+

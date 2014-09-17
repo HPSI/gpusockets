@@ -17,7 +17,7 @@ int init_server_net(char * port, struct addrinfo *addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET;		// Allow IPv4
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;	// For wildcard IP address

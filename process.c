@@ -299,11 +299,11 @@ uint64_t get_param_from_list(param_node *list, uint32_t param_id) {
 }
 
 int remove_param_from_list(param_node *list, uint32_t param_id) {
-	param_node *pos;
+	param_node *pos, *tmp;
 	
-	list_for_each_entry(pos, &list->node, node) {
+	list_for_each_entry_safe(pos, tmp, &list->node, node) {
 		if (pos->id == param_id) {
-			list_del(&list->node);
+			list_del(&pos->node);
 			return 0;
 		}
 	}
@@ -471,6 +471,7 @@ int memory_allocate_for_client(uintptr_t *dev_mem_ptr, size_t mem_size) {
 	res = cuda_err_print(cuMemAlloc(cuda_dev_ptr, mem_size), 0);
 	if (res == CUDA_SUCCESS) {
 		*dev_mem_ptr = (uintptr_t) cuda_dev_ptr;
+		printf("allocated @%p\n", cuda_dev_ptr);
 	}
 
 	return res;
@@ -539,7 +540,6 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 		extra[2] = CU_LAUNCH_PARAM_BUFFER_SIZE;
 		extra[3] = &(extras[0].len);
 		extra[4] = CU_LAUNCH_PARAM_END;
-
 	}
 
 	res = cuda_err_print(cuLaunchKernel(*func, grid_x, grid_y, grid_z,

@@ -13,6 +13,7 @@ typedef struct params_s {
 	param_node *module;
 	param_node *function;
 	param_node *variable;
+	param_node *stream;
 } params;
 
 
