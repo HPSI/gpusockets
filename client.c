@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <inttypes.h>
 
 #include "client.h"
 #include "common.h"
@@ -91,8 +92,8 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 		if (cmd->n_uint_args > 0) {
 			*result = malloc_safe(sizeof(uint64_t));
 			memcpy(*result, &cmd->uint_args[0], sizeof(uint64_t));
-			printf("| result: %p\n", (void *)*result);
-		} else if (cmd->n_extra_args > 0) {
+			printf("| result: 0x%" PRIx64 "\n", *(uint64_t *) *result);
+		 } else if (cmd->n_extra_args > 0) {
 			*result = malloc_safe(cmd->extra_args[0].len);
 			memcpy(*result, cmd->extra_args[0].data, cmd->extra_args[0].len);
 		}

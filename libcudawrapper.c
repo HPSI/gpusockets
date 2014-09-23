@@ -7,10 +7,14 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <cuda.h>
+#include <inttypes.h>
 
 #include "common.h"
 #include "common.pb-c.h"
 #include "client.h"
+
+
+//TODO: assert stored results' size fits...
 
 static params c_params;
 
@@ -247,9 +251,8 @@ CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		param_id = add_param_to_list(&c_params.variable, *(uint64_t *) result);
-		memcpy(dptr, &param_id, sizeof(param_id));
-		free(result);	
+		*dptr = *(uint64_t *) result;
+		free(result);
 	}
 
 	// for testing
@@ -274,9 +277,7 @@ CUresult cuMemFree(CUdeviceptr dptr) {
 
 	arg.type = UINT;
 	arg.length = sizeof(uint64_t);
-	memcpy(&param_id, &dptr, sizeof(uint32_t));
-	param = get_param_from_list(c_params.variable, param_id);
-	arg.data = &param;
+	arg.data = &dptr;
 
 	if (send_cuda_cmd(c_params.sock_fd, args, 1, MEMORY_FREE) == -1) {
 		fprintf(stderr, "Problem sending CUDA cmd!\n");
@@ -285,10 +286,8 @@ CUresult cuMemFree(CUdeviceptr dptr) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		remove_param_from_list(c_params.variable, param_id);
-		param_id = 0;	
-		memcpy(&dptr, &param_id, sizeof(param_id));
-		free(result);	
+		dptr = 0;
+		free(result);
 	}
 
 	// for testing
@@ -315,10 +314,8 @@ CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCou
 
 	arg_uint.type = UINT;
 	arg_uint.length = sizeof(uint64_t);
-	memcpy(&param_id, &dstDevice, sizeof(uint32_t));
-	param = get_param_from_list(c_params.variable, param_id);
-	arg_uint.data = &param;
-
+	arg_uint.data = &dstDevice;
+	
 	arg_b.type = BYTES;
 	arg_b.length = ByteCount;
 	arg_b.data = srcHost;
@@ -358,9 +355,7 @@ CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) {
 	arg.length = sizeof(uint64_t) * arg.elements;
 	arg.data = malloc_safe(arg.length);
 	memset(arg.data, 0, arg.length);
-	memcpy(&param_id, &srcDevice, sizeof(uint32_t));
-	param = get_param_from_list(c_params.variable, param_id);
-	memcpy(arg.data, &param, sizeof(param));
+	memcpy(arg.data, &srcDevice, sizeof(srcDevice));
 	memcpy(arg.data+sizeof(uint64_t), &ByteCount, sizeof(ByteCount));
 	if (send_cuda_cmd(c_params.sock_fd, args, 1, MEMCPY_DEV_TO_HOST) == -1) {
 		fprintf(stderr, "Problem sending CUDA cmd!\n");
@@ -369,7 +364,8 @@ CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		dstHost = result;
+		memcpy(dstHost, result, ByteCount);
+		free(result);
 	}
 
 	// for testing
@@ -377,5 +373,83 @@ CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) {
 	// --
 
 	return res_code; // cuMemcpyDtoH_real(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount);
+}
+
+CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
+		unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX,
+	   	unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes,
+	   	CUstream hStream, void **kernelParams, void **extra) {
+	
+	static CUresult (*cuLaunchKernel_real)
+		(CUfunction f, unsigned int gridDimX, unsigned int gridDimY,
+		 unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY,
+		 unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream,
+		 void **kernelParams, void **extra) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg_uint = { .elements = 9 }, arg_b = { .elements = 1 },
+		*args[] = { &arg_uint, &arg_b };
+	uint32_t param_id;
+	uint64_t param;
+	int i = 0;
+
+	if (cuLaunchKernel_real == NULL)
+		cuLaunchKernel_real = dlsym(RTLD_NEXT, "cuLaunchKernel");
+
+	get_server_connection(&c_params);
+
+	arg_uint.type = UINT;
+	arg_uint.length = sizeof(uint64_t) * arg_uint.elements;
+	arg_uint.data = malloc_safe(arg_uint.length);
+	memset(arg_uint.data, 0, arg_uint.length);
+	memcpy(arg_uint.data, &gridDimX, sizeof(gridDimX));
+	memcpy(arg_uint.data+sizeof(uint64_t), &gridDimY, sizeof(gridDimY));
+	memcpy(arg_uint.data+(sizeof(uint64_t)*2), &gridDimZ, sizeof(gridDimZ));
+	memcpy(arg_uint.data+(sizeof(uint64_t)*3), &blockDimX, sizeof(blockDimX));
+	memcpy(arg_uint.data+(sizeof(uint64_t)*4), &blockDimY, sizeof(blockDimY));
+	memcpy(arg_uint.data+(sizeof(uint64_t)*5), &blockDimZ, sizeof(blockDimZ));
+	memcpy(arg_uint.data+(sizeof(uint64_t)*6), &sharedMemBytes, sizeof(sharedMemBytes));
+	memcpy(&param_id, &f, sizeof(uint32_t));
+	param = get_param_from_list(c_params.function, param_id);
+	memcpy(arg_uint.data+(sizeof(uint64_t)*7), &param, sizeof(param));
+	if (hStream != 0) {
+		memcpy(&param_id, &hStream, sizeof(uint32_t));
+		param = get_param_from_list(c_params.stream, param_id);
+	} else {
+		param = 0;
+	}
+	memcpy(arg_uint.data+(sizeof(uint64_t)*8), &param, sizeof(param));
+
+	if (kernelParams != NULL) {
+		// TODO: implement params support...
+	} else { 
+		arg_b.type = BYTES;
+		arg_b.data = NULL;
+		arg_b.length = 0;
+		do {
+			if (extra[i] == CU_LAUNCH_PARAM_BUFFER_POINTER)
+				arg_b.data = extra[++i];
+			else if (extra[i] == CU_LAUNCH_PARAM_BUFFER_SIZE)
+				arg_b.length = *(size_t *) extra[++i];
+
+			++i;
+		} while (extra[i] != NULL && extra[i] != CU_LAUNCH_PARAM_END);
+	}
+	
+	if (send_cuda_cmd(c_params.sock_fd, args, 2, LAUNCH_KERNEL) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+
+	if (result != NULL)
+		free(result);	
+
+	// for testing
+	close(c_params.sock_fd);
+	// --
+
+	return res_code; // cuLaunchKernel_real(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra);
 }
 

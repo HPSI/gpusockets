@@ -14,17 +14,17 @@ server: server.o protocol.o protocol.h process.o process.h common.pb-c.o common.
 	$(CC) $(CFLAGS) -o $@ $< protocol.o process.o common.pb-c.o common.o \
 		$(LDLIBS)
 
-test-client: test-client.o protocol.o protocol.h process.o process.h common.pb-c.o common.pb-c.h common.o common.h
+test-client: test-client.o protocol.o protocol.h process.o process.h common.pb-c.o client.o client.h common.pb-c.h common.o common.h
 	$(CC) $(CFLAGS) -o $@ $< protocol.o process.o common.pb-c.o common.o \
-		$(LDLIBS)
+		client.o $(LDLIBS)
 
 libcudawrapper: libcudawrapper.so.o client.so.o client.h protocol.so.o protocol.h process.so.o process.h common.pb-c.so.o common.pb-c.h common.so.o common.h
 	$(CC) $(CFLAGS) -shared -o libcudawrapper.so libcudawrapper.so.o \
 	   	client.so.o protocol.so.o process.so.o common.pb-c.so.o common.so.o \
 		$(LDLIBS) -ldl
 
-test-cuda: test-cuda.o
-	$(CC) $(CFLAGS) -o $@ $< $(LDLIBS)
+test-cuda: test-cuda.o common.o common.h
+	$(CC) $(CFLAGS) -o $@ $< common.o $(LDLIBS)
 
 
 %.o: %.c

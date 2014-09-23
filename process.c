@@ -463,15 +463,14 @@ int get_module_function_of_client(uintptr_t *fun_ptr, uintptr_t mod_ptr, char *f
 
 int memory_allocate_for_client(uintptr_t *dev_mem_ptr, size_t mem_size) {
 	CUresult res;
-	CUdeviceptr *cuda_dev_ptr;
-	
+	CUdeviceptr cuda_dev_ptr;
+
 	printf("Allocating CUDA device memory of size %zuB...\n", mem_size);
-	cuda_dev_ptr = malloc_safe(sizeof(*cuda_dev_ptr));
 	
-	res = cuda_err_print(cuMemAlloc(cuda_dev_ptr, mem_size), 0);
+	res = cuda_err_print(cuMemAlloc(&cuda_dev_ptr, mem_size), 0);
 	if (res == CUDA_SUCCESS) {
-		*dev_mem_ptr = (uintptr_t) cuda_dev_ptr;
-		printf("allocated @%p\n", cuda_dev_ptr);
+		*dev_mem_ptr = cuda_dev_ptr;
+		printf("allocated @0x%llx\n", cuda_dev_ptr);
 	}
 
 	return res;
@@ -479,38 +478,36 @@ int memory_allocate_for_client(uintptr_t *dev_mem_ptr, size_t mem_size) {
 
 int memory_free_for_client(uintptr_t dev_mem_ptr) {
 	CUresult res;
-	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+	CUdeviceptr cuda_dev_ptr = (CUdeviceptr) dev_mem_ptr;
 
-	printf("Freeing CUDA device memory @%p...\n", cuda_dev_ptr);
+	printf("Freeing CUDA device memory @0x%llx...\n", cuda_dev_ptr);
 
-	res = cuda_err_print(cuMemFree(*cuda_dev_ptr), 0);
-	if (res == CUDA_SUCCESS)
-		free(cuda_dev_ptr);
+	res = cuda_err_print(cuMemFree(cuda_dev_ptr), 0);
 
 	return res;
 }
 
 int memcpy_host_to_dev_for_client(uintptr_t dev_mem_ptr, void *host_mem_ptr, size_t mem_size) {
 	CUresult res;
-	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+	CUdeviceptr cuda_dev_ptr = (CUdeviceptr) dev_mem_ptr;
 
-	printf("Memcpying %zuB from host to CUDA device @%p...\n", mem_size, cuda_dev_ptr);
+	printf("Memcpying %zuB from host to CUDA device @0x%llx...\n", mem_size, cuda_dev_ptr);
 
-	res = cuda_err_print(cuMemcpyHtoD(*cuda_dev_ptr, host_mem_ptr, mem_size), 0);
+	res = cuda_err_print(cuMemcpyHtoD(cuda_dev_ptr, host_mem_ptr, mem_size), 0);
 
 	return res;
 }
 
 int memcpy_dev_to_host_for_client(void **host_mem_ptr, size_t *host_mem_size, uintptr_t dev_mem_ptr, size_t mem_size) {
 	CUresult res;
-	CUdeviceptr *cuda_dev_ptr = (CUdeviceptr *) dev_mem_ptr;
+	CUdeviceptr cuda_dev_ptr = (CUdeviceptr) dev_mem_ptr;
 
-	printf("Memcpying %zuB from CUDA device @%p to host...\n", mem_size, cuda_dev_ptr);
+	printf("Memcpying %zuB from CUDA device @0x%llx to host...\n", mem_size, cuda_dev_ptr);
 
 	*host_mem_size = mem_size;
 	*host_mem_ptr = malloc_safe(mem_size);
 
-	res = cuda_err_print(cuMemcpyDtoH(*host_mem_ptr, *cuda_dev_ptr, mem_size), 0);
+	res = cuda_err_print(cuMemcpyDtoH(*host_mem_ptr, cuda_dev_ptr, mem_size), 0);
 
 	return res;
 }
@@ -525,13 +522,15 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 	void **params = NULL, **extra = NULL;
 	size_t i, n_params = n_uints - 9;
 
+	printf("Executing kernel...\n");
 	if (n_params > 0) {
 		params = malloc_safe(sizeof(void *) * n_params);
 	
 		for(i = 0; i < n_params; i++) {
-			params[i] = (void *) uints[9 + i]; 
+			params[i] = (void *) uints[9 + i];
 		}
-	}
+		printf("using <params>\n");
+	}	
 	if (n_extras > 0) {
 		extra = malloc_safe(sizeof(void *) * 5);
 
@@ -540,8 +539,11 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 		extra[2] = CU_LAUNCH_PARAM_BUFFER_SIZE;
 		extra[3] = &(extras[0].len);
 		extra[4] = CU_LAUNCH_PARAM_END;
+		printf("using <extra>\n");
 	}
-
+	printf("with grid (x, y, z) = (%u, %u, %u)\n", grid_x, grid_y, grid_z);
+	printf("and block (x, y, z) = (%u, %u, %u)\n", block_x, block_y, block_z);
+	
 	res = cuda_err_print(cuLaunchKernel(*func, grid_x, grid_y, grid_z,
 				block_x, block_y, block_z, shared_mem_size, h_stream,
 				params, extra), 0);
@@ -558,7 +560,7 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void *client_handle) {
 	int cuda_result = 0, arg_count = 0;
 	CudaCmd *cmd = cmd_ptr;
-	uintptr_t id_ptr = 0;
+	uint64_t id_ptr = 0;
 	void *extra_args = NULL, *res_data = NULL;
 	size_t extra_args_size = 0, res_length = 0;
 	var **res = NULL;
@@ -634,7 +636,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 
 	if (id_ptr != 0) {
 		res_type = UINT;
-		res_length = sizeof(uintptr_t);
+		res_length = sizeof(uint64_t);
 		res_data = &id_ptr;
 	} else if (extra_args_size != 0) {	
 		res_type = BYTES;
