@@ -62,7 +62,7 @@ void get_server_connection(params *p) {
 	// TODO: get id from server
 	if (p->id < 0) {
 		p->sock_fd = init_client(SERVER_IP, SERVER_PORT, &(p->addr));
-		printf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
+		gdprintf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
 	}
 
 }
@@ -73,7 +73,7 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 	void *buffer=NULL, *payload=NULL, *dec_msg=NULL;
 	int res_code;
 
-	printf("Waiting for response:\n");
+	gdprintf("Waiting for response:\n");
 	msg_length = receive_message(&buffer, sock_fd);
 	if (msg_length > 0) {
 		decode_message(&dec_msg, &payload, buffer, msg_length);
@@ -88,11 +88,11 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 	} else {
 		cmd = payload;
 		res_code = cmd->int_args[0];
-		printf("Got response:\n| result code: %d\n", res_code);
+		gdprintf("Got response:\n| result code: %d\n", res_code);
 		if (cmd->n_uint_args > 0) {
 			*result = malloc_safe(sizeof(uint64_t));
 			memcpy(*result, &cmd->uint_args[0], sizeof(uint64_t));
-			printf("| result: 0x%" PRIx64 "\n", *(uint64_t *) *result);
+			gdprintf("| result: 0x%" PRIx64 "\n", *(uint64_t *) *result);
 		 } else if (cmd->n_extra_args > 0) {
 			*result = malloc_safe(cmd->extra_args[0].len);
 			memcpy(*result, cmd->extra_args[0].data, cmd->extra_args[0].len);
@@ -111,13 +111,13 @@ int get_available_gpus(int sock_fd) {
 	size_t buf_size, msg_length;
 	void *buffer=NULL, *payload=NULL, *dec_msg=NULL;
 
-	printf("Sending request for available cuda devices...\n");
+	gdprintf("Sending request for available cuda devices...\n");
 	buf_size = encode_message(&buffer, CUDA_DEVICE_QUERY, NULL);
 	send_message(sock_fd, buffer, buf_size);
 	if (buffer != NULL)
 		free(buffer);
 	
-	printf("Waiting for response:\n");
+	gdprintf("Waiting for response:\n");
 	msg_length = receive_message(&buffer, sock_fd);
 	if (msg_length > 0) {
 		decode_message(&dec_msg, &payload, buffer, msg_length);
@@ -131,7 +131,7 @@ int get_available_gpus(int sock_fd) {
 		exit(EXIT_FAILURE);
 	} else {
 		devices = payload;
-		printf("Got response, free devices: %u\n", devices->devices_free);
+		gdprintf("Got response, free devices: %u\n", devices->devices_free);
 		free_decoded_message(dec_msg);
 	}
 
@@ -145,7 +145,7 @@ int send_cuda_cmd(int sock_fd, var **args, size_t arg_count, int type) {
 	void *buffer = NULL, *payload = NULL;
 	size_t buf_size;
 
-	printf("Sendind CUDA cmd...\n");
+	gdprintf("Sendind CUDA cmd...\n");
 	pack_cuda_cmd(&payload, args, arg_count, type);	
 
 	buf_size = encode_message(&buffer, CUDA_CMD, payload);

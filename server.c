@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
 					// -- remove this...
 					CudaDeviceList *devs;
 					devs = result;
-					printf("Test result: %s\n", devs->device[0]->name);
+					gdprintf("Test result: %s\n", devs->device[0]->name);
 					// -- /
 					break;
 			}
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
 			}
 
 			if (resp_type != -1) {
-				printf("Sending result\n");
+				gdprintf("Sending result\n");
 				pack_cuda_cmd(&payload, result, arg_cnt, CUDA_CMD_RESULT);
 				msg_length = encode_message(&msg, resp_type, payload);
 				send_message(client_sock_fd, msg, msg_length);
