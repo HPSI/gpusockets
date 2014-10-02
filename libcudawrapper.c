@@ -17,18 +17,41 @@
 //TODO: assert stored results' size fits...
 
 static params c_params;
+static unsigned int ctx_count = 0;
 
 CUresult cuInit(unsigned int Flags) {
 	static CUresult (*cuInit_real) (unsigned int) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg = { .elements = 1 }, *args[] = { &arg };
+	int param;
 
 	if (cuInit_real == NULL)
 		cuInit_real = dlsym(RTLD_NEXT, "cuInit");
-	
+
 	init_params(&c_params);	
-	//get_server_connection(&c_params);
+	get_server_connection(&c_params);
+	
+	arg.type = INT;
+	arg.length = sizeof(int);
+	arg.data = &c_params.id;
+	if (send_cuda_cmd(c_params.sock_fd, args, 1, INIT) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		c_params.id = *(uint64_t *) result;
+		free(result);	
+	}
 
 	// Server should have already initialized CUDA Driver API,
-	// so no need to send anything...
+	// so sending only the current client id (requesting a new one)...
+
+	// for testing
+	// close(c_params.sock_fd);
+	// --
 
 	return CUDA_SUCCESS; // cuInit_real(Flags);
 }
@@ -55,13 +78,13 @@ CUresult cuDeviceGet(CUdevice *device, int ordinal) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		param_id = add_param_to_list(&c_params.device, *(uint64_t *) result);
+		param_id = add_param_to_list(&c_params.device, *(uint64_t *) result, NULL);
 		memcpy(device, &param_id, sizeof(param_id));	
 		free(result);	
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuDeviceGet_real(CUdevice *device, int ordinal);
@@ -95,13 +118,17 @@ CUresult cuCtxCreate(CUcontext* pctx, unsigned int flags, CUdevice dev) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		param_id = add_param_to_list(&c_params.context, *(uint64_t *) result);
+		param_id = add_param_to_list(&c_params.context, *(uint64_t *) result, NULL);
 		memcpy(pctx, &param_id, sizeof(param_id));
+		++ctx_count;
 		free(result);	
+	} else if (res_code == -2) {
+		fprintf(stderr," Requested CUDA device is busy!\n");
+		res_code = CUDA_ERROR_INVALID_DEVICE;
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuCtxCreate_real(CUcontext* pctx, unsigned int flags, CUdevice dev);
@@ -122,12 +149,21 @@ CUresult cuCtxDestroy(CUcontext ctx) {
 	
 	// TODO: 
 	// - Free lists etc. 
-	// - Send finshed message if CtxDestroy is the last.
 	arg.type = UINT;
-	arg.length = sizeof(uint64_t);
+	if (ctx_count != 1) {
+		arg.length = sizeof(uint64_t);
+	} else {
+		arg.length = 2 * sizeof(uint64_t);
+		arg.elements = 2;
+	}
+	arg.data = malloc_safe(arg.length);
+	memset(arg.data, 0, arg.length);
 	memcpy(&param_id, &ctx, sizeof(uint32_t));
 	param = get_param_from_list(c_params.context, param_id);
-	arg.data = &param;
+	memcpy(arg.data, &param, sizeof(param));
+	if (ctx_count == 1)
+		memcpy(arg.data+sizeof(uint64_t), &ctx_count, sizeof(ctx_count));
+
 	if (send_cuda_cmd(c_params.sock_fd, args, 1, CONTEXT_DESTROY) == -1) {
 		fprintf(stderr, "Problem sending CUDA cmd!\n");
 		exit(EXIT_FAILURE);
@@ -136,13 +172,14 @@ CUresult cuCtxDestroy(CUcontext ctx) {
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
 		remove_param_from_list(c_params.context, param_id);
-		param_id = 0;	
+		param_id = 0;
 		memcpy(&ctx, &param_id, sizeof(param_id));
+		--ctx_count;
 		free(result);	
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuCtxDestroy_real(CUcontext ctx);
@@ -171,13 +208,13 @@ CUresult cuModuleLoad(CUmodule *module, const char *fname) {
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		param_id = add_param_to_list(&c_params.module, *(uint64_t *) result);
+		param_id = add_param_to_list(&c_params.module, *(uint64_t *) result, NULL);
 		memcpy(module, &param_id, sizeof(param_id));
 		free(result);	
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuModuleLoad_real(CUmodule *module, const char *fname);
@@ -215,13 +252,13 @@ CUresult cuModuleGetFunction(CUfunction* hfunc, CUmodule hmod, const char* name)
 
 	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
 	if (res_code == CUDA_SUCCESS) {
-		param_id = add_param_to_list(&c_params.function, *(uint64_t *) result);
+		param_id = add_param_to_list(&c_params.function, *(uint64_t *) result, NULL);
 		memcpy(hfunc, &param_id, sizeof(param_id));
 		free(result);	
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuModuleGetFunction_real(CUfunction* hfunc, CUmodule hmod, const char* name);
@@ -256,7 +293,7 @@ CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize) {
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuMemAlloc_real(CUdeviceptr *dptr, size_t bytesize);
@@ -291,7 +328,7 @@ CUresult cuMemFree(CUdeviceptr dptr) {
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuMemFree_real(CUdeviceptr dptr);
@@ -331,7 +368,7 @@ CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCou
 		free(result);	
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuMemcpyHtoD_real(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount);
@@ -369,7 +406,7 @@ CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount) {
 	}
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuMemcpyDtoH_real(void *dstHost, CUdeviceptr srcDevice, size_t ByteCount);
@@ -447,7 +484,7 @@ CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
 		free(result);	
 
 	// for testing
-	close(c_params.sock_fd);
+	// close(c_params.sock_fd);
 	// --
 
 	return res_code; // cuLaunchKernel_real(CUfunction f, unsigned int gridDimX, unsigned int gridDimY, unsigned int gridDimZ, unsigned int blockDimX, unsigned int blockDimY, unsigned int blockDimZ, unsigned int sharedMemBytes, CUstream hStream, void **kernelParams, void **extra);

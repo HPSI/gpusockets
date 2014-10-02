@@ -104,31 +104,24 @@ int main(int argc, char *argv[]) {
 		else 
 			printf("from unidentified client");
 
-		//for(;;) {
+		for(;;) {
 			msg_length = receive_message(&msg, client_sock_fd);
 			if (msg_length > 0)
 				msg_type = decode_message(&dec_msg, &payload, msg, msg_length);
 
-			add_client_to_list(&client_handle, &client_list, 0);
-			print_clients(client_list);	
-
 			printf("Processing message\n");
 			switch (msg_type) {
 				case CUDA_CMD: 
-					arg_cnt = process_cuda_cmd(&result, payload, free_list, busy_list, client_handle);
+					arg_cnt = process_cuda_cmd(&result, payload, free_list, busy_list, &client_list, &client_handle);
 					resp_type = CUDA_CMD_RESULT;
 					break;
 				case CUDA_DEVICE_QUERY:
 					process_cuda_device_query(&result, free_list, busy_list);
 					resp_type = CUDA_DEVICE_LIST;
-					// -- remove this...
-					CudaDeviceList *devs;
-					devs = result;
-					gdprintf("Test result: %s\n", devs->device[0]->name);
-					// -- /
 					break;
 			}
 
+			print_clients(client_list);
 			print_cuda_devices(free_list, busy_list);
 
 			if (msg != NULL) {
@@ -154,12 +147,18 @@ int main(int argc, char *argv[]) {
 					result = NULL;
 				}
 			}
-			printf("--------------\nMessage processed, cleaning up...\n");
+			printf(">>\nMessage processed, cleaning up...\n<<\n");
 			if (msg != NULL) {
 				free(msg);
 				msg = NULL;
 			}
-		//}// for testing...
+			
+			if (get_client_status(client_handle) == 0) {
+				// TODO: freeing
+				printf("\n--------------\nClient finished.\n\n");
+				break;
+			}
+		}
 	}
 	close(client_sock_fd);
 	

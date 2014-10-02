@@ -21,6 +21,10 @@ int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr);
 
 void init_params(params *p);
 
+uint64_t get_param_from_list(param_node *list, uint32_t param_id);
+
+int remove_param_from_list(param_node *list, uint32_t param_id);
+
 void get_server_connection(params *p);
 
 int64_t get_cuda_cmd_result(void **result, int sock_fd);

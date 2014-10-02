@@ -57,6 +57,29 @@ void init_params(params *p) {
 	p->stream = NULL;
 }
 
+uint64_t get_param_from_list(param_node *list, uint32_t param_id) {
+	param_node *param = NULL;
+
+	if (find_param_by_id(&param, list, param_id) != 0) {
+		fprintf(stderr, "Requested param not in given list!\n");
+		return 0;
+	}
+
+	return param->ptr;
+}
+
+int remove_param_from_list(param_node *list, uint32_t param_id) {
+	param_node *param = NULL;
+
+	if (find_param_by_id(&param, list, param_id) != 0) {
+		fprintf(stderr, "Requested param not in given list!\n");
+		return -1;
+	}
+
+	del_param_of_list(param);
+	return 0;
+}
+
 void get_server_connection(params *p) {
 	
 	// TODO: get id from server
