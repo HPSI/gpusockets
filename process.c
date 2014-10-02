@@ -432,6 +432,36 @@ int free_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 	return -1;
 }
 
+int get_device_count_for_client(uint64_t *host_count) {
+	CUresult res;
+	int count;
+
+	gdprintf("Getting CUDA device count...\n");
+	
+	res = cuda_err_print(cuDeviceGetCount(&count), 0);
+	if (res == CUDA_SUCCESS)
+		*host_count = count;
+
+	return res;
+}
+
+int get_device_name_for_client(void **host_name_ptr, size_t *host_name_size, int name_size, uintptr_t dev_ptr) {
+	CUresult res;
+	CUdevice *cuda_device = (CUdevice *) dev_ptr;
+
+	gdprintf("Getting name of CUDA device @%p...\n", cuda_device);
+
+	*host_name_size = name_size;
+	*host_name_ptr = malloc_safe(name_size);
+
+	res = cuda_err_print(cuDeviceGetName(*host_name_ptr, name_size, *cuda_device), 0);
+	
+	printf("\n\n>>>>> %s\n\n", *host_name_ptr);
+
+	return res;
+}
+
+
 int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, uintptr_t dev_ptr, client_node *client) {
 	CUcontext *cuda_context;
 	CUdevice *cuda_device = (CUdevice *) dev_ptr;
@@ -611,7 +641,7 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void **client_list, void **client_handle) {
 	int cuda_result = 0, arg_count = 0;
 	CudaCmd *cmd = cmd_ptr;
-	uint64_t id_ptr = 0, tmp_ptr = 0;
+	uint64_t uint_res = 0, tmp_ptr = 0;
 	void *extra_args = NULL, *res_data = NULL;
 	size_t extra_args_size = 0, res_length = 0;
 	var **res = NULL;
@@ -627,7 +657,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case INIT:
 			gdprintf("Executing cuInit...\n");
 			get_client_handle(client_handle, client_list, cmd->int_args[0]);
-			id_ptr = ((client_node *) *client_handle)->id;
+			uint_res = ((client_node *) *client_handle)->id;
 			// cuInit() should have already been executed by the server 
 			// by that point...
 			//cuda_result = cuda_err_print(cuInit(cmd->uint_args[0]), 0);
@@ -636,21 +666,29 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			break;
 		case DEVICE_GET:
 			gdprintf("Executing cuDeviceGet...\n");
-			if (update_device_of_client(&id_ptr, free_list, cmd->int_args[0], *client_handle) < 0)
+			if (update_device_of_client(&uint_res, free_list, cmd->int_args[0], *client_handle) < 0)
 				cuda_result = CUDA_ERROR_INVALID_DEVICE;
 			else
 				cuda_result = CUDA_SUCCESS;
 
 			res_type = UINT;
 			break;
+		case DEVICE_GET_COUNT:
+			gdprintf("Executing cuDeviceGetCount...\n");
+			cuda_result = get_device_count_for_client(&uint_res);
+			res_type = UINT;
+			break;
+		case DEVICE_GET_NAME:
+			gdprintf("Executing cuDeviceGetName...\n");
+			cuda_result = get_device_name_for_client(&extra_args, &extra_args_size, cmd->int_args[0], cmd->uint_args[0]);
+			break;
 		case CONTEXT_CREATE:
 			gdprintf("Executing cuCtxCreate...\n");
 			cuda_result = assign_device_to_client(cmd->uint_args[1], free_list, busy_list, *client_handle);
-			if (cuda_result	< 0) {
-				// TODO: Handle appropriately in client.
-				break;
-			}
-			cuda_result = create_context_of_client(&id_ptr, cmd->uint_args[0], cmd->uint_args[1], *client_handle);
+			if (cuda_result	< 0)
+				break; // Handle appropriately in client.
+
+			cuda_result = create_context_of_client(&uint_res, cmd->uint_args[0], cmd->uint_args[1], *client_handle);
 			res_type = UINT;
 			break;
 		case CONTEXT_DESTROY:
@@ -669,17 +707,17 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case MODULE_LOAD:
 			gdprintf("Executing cuModuleLoad...\n");
 			//print_file_as_hex(cmd->extra_args[0].data, cmd->extra_args[0].len);
-			cuda_result = load_module_of_client(&id_ptr, &(cmd->extra_args[0]), *client_handle);
+			cuda_result = load_module_of_client(&uint_res, &(cmd->extra_args[0]), *client_handle);
 			res_type = UINT;
 			break;
 		case MODULE_GET_FUNCTION:
 			gdprintf("Executing cuModuleGetFuction...\n");
-			cuda_result = get_module_function_of_client(&id_ptr, cmd->uint_args[0], cmd->str_args[0], *client_handle);
+			cuda_result = get_module_function_of_client(&uint_res, cmd->uint_args[0], cmd->str_args[0], *client_handle);
 			res_type = UINT;
 			break;
 		case MEMORY_ALLOCATE:
 			gdprintf("Executing cuMemAlloc...\n");
-			cuda_result = memory_allocate_for_client(&id_ptr, cmd->uint_args[0]);
+			cuda_result = memory_allocate_for_client(&uint_res, cmd->uint_args[0]);
 			res_type = UINT;
 			break;
 		case MEMORY_FREE:
@@ -702,7 +740,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 
 	if (res_type == UINT) {
 		res_length = sizeof(uint64_t);
-		res_data = &id_ptr;
+		res_data = &uint_res;
 	} else if (extra_args_size != 0) {	
 		res_type = BYTES;
 		res_length = extra_args_size;
@@ -795,10 +833,6 @@ int pack_cuda_cmd(void **payload, var **args, size_t arg_count, int type) {
 	int i;
 
 	gdprintf("Packing CUDA cmd...\n");
-
-	if (args == NULL) {
-		return -1;
-	}
 
 	cmd = malloc_safe(sizeof(CudaCmd));
 	cuda_cmd__init(cmd);

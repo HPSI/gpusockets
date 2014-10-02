@@ -10,7 +10,8 @@ int main() {
 	CUmodule module;
 	CUfunction function;
 	CUdeviceptr d_a, d_b, d_c;
-	int a = 10, b = 12, c;
+	int a = 10, b = 12, c, dev_count;
+	char dev_name[100];
 	size_t arg_len = 3 * sizeof(CUdeviceptr);
 	void *params[] = { &d_a, &d_b, &d_c },
 		 *args = NULL,
@@ -24,9 +25,14 @@ int main() {
 
 
 	cuInit(0);
-
+	
+	cuDeviceGetCount(&dev_count);
+	printf("Compute capable CUDA devices (free/busy): %d\n", dev_count);
+	
 	printf("\n* Get device and create context... *\n");
 	cuDeviceGet(&device, 0);
+	cuDeviceGetName(dev_name, sizeof(dev_name), device);
+	printf("Got device \"%s\".\n", dev_name);
 	cuCtxCreate(&context, 0, device);
 
 	printf("\n* Load module and get function... *\n");

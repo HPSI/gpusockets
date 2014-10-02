@@ -116,9 +116,10 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 			*result = malloc_safe(sizeof(uint64_t));
 			memcpy(*result, &cmd->uint_args[0], sizeof(uint64_t));
 			gdprintf("| result: 0x%" PRIx64 "\n", *(uint64_t *) *result);
-		 } else if (cmd->n_extra_args > 0) {
+		} else if (cmd->n_extra_args > 0) {
 			*result = malloc_safe(cmd->extra_args[0].len);
 			memcpy(*result, cmd->extra_args[0].data, cmd->extra_args[0].len);
+			gdprintf("| result: (bytes)\n");
 		}
 		free_decoded_message(dec_msg);
 	}
@@ -126,7 +127,7 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 	if (buffer != NULL)
 		free(buffer);
 
-	return cmd->int_args[0];
+	return res_code;
 }
 
 int get_available_gpus(int sock_fd) {

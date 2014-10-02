@@ -87,7 +87,75 @@ CUresult cuDeviceGet(CUdevice *device, int ordinal) {
 	// close(c_params.sock_fd);
 	// --
 
+	return res_code; // cuDeviceGet_real
+}
+
+CUresult cuDeviceGetCount(int *count) {
+	static CUresult (*cuDeviceGetCount_real) (int *count) = NULL;
+	int tmp_count = 0;
+	void *result = NULL;
+	CUresult res_code;
+
+	if (cuDeviceGetCount_real == NULL)
+		cuDeviceGetCount_real = dlsym(RTLD_NEXT, "cuDeviceGetCount");
+
+	get_server_connection(&c_params);
+	
+	if (send_cuda_cmd(c_params.sock_fd, NULL, 0, DEVICE_GET_COUNT) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		tmp_count = *(uint64_t *) result;
+		memcpy(count, &tmp_count, sizeof(int));
+		free(result);
+	}
+
+	// for testing
+	// close(c_params.sock_fd);
+	// --
+
 	return res_code; // cuDeviceGet_real(CUdevice *device, int ordinal);
+}
+
+CUresult cuDeviceGetName(char *name, int len, CUdevice dev) {
+	static CUresult (*cuDeviceGetName_real) (char *name, int len, CUdevice dev) = NULL;
+	void *result = NULL;
+	CUresult res_code;
+	var arg_int = { .elements = 1 }, arg_uint = { .elements = 1 },
+		*args[] = { &arg_int, &arg_uint };
+	uint32_t param_id;
+	uint64_t param;
+
+	if (cuDeviceGetName_real == NULL)
+		cuDeviceGetName_real = dlsym(RTLD_NEXT, "cuDeviceGetName");
+
+	get_server_connection(&c_params);
+
+	arg_int.type = INT;
+	arg_int.length = sizeof(int);
+	arg_int.data = &len;
+
+	arg_uint.type = UINT;
+	arg_uint.length = sizeof(uint64_t);
+	memcpy(&param_id, &dev, sizeof(uint32_t));
+	param = get_param_from_list(c_params.device, param_id);
+	arg_uint.data = &param;
+
+	if (send_cuda_cmd(c_params.sock_fd, args, 2, DEVICE_GET_NAME) == -1) {
+		fprintf(stderr, "Problem sending CUDA cmd!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res_code = get_cuda_cmd_result(&result, c_params.sock_fd);
+	if (res_code == CUDA_SUCCESS) {
+		memcpy(name, result, len);
+		free(result);
+	}
+
+	return res_code; // cuDeviceGetName_real
 }
 
 CUresult cuCtxCreate(CUcontext* pctx, unsigned int flags, CUdevice dev) {

@@ -153,12 +153,12 @@ size_t encode_message(void **result, int msg_type, void *payload) {
 			message.cuda_devices = payload;
 			break;
 	}
-	
+
 	msg_length = cookie__get_packed_size(&message);
 	msg_buffer = malloc_safe(msg_length);
 	cookie__pack(&message, msg_buffer);
 	msg_len_n = htonl(msg_length);
-	
+
 	buf_size = msg_length + sizeof(msg_len_n);
 	buffer = malloc_safe(buf_size);
 	memcpy(buffer, &msg_len_n, sizeof(msg_len_n));
