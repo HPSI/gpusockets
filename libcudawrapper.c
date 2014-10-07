@@ -202,6 +202,14 @@ CUresult cuCtxCreate(CUcontext* pctx, unsigned int flags, CUdevice dev) {
 	return res_code; // cuCtxCreate_real(CUcontext* pctx, unsigned int flags, CUdevice dev);
 }
 
+/* Add dummy detach for compatibility
+ * FIXME: do it properly -- it's a deprecated function though
+ */
+CUresult cuCtxDetach(CUcontext ctx) {
+
+	return cuCtxDetach(ctx);
+}
+
 CUresult cuCtxDestroy(CUcontext ctx) {
 	static CUresult (*cuCtxDestroy_real) (CUcontext ctx) = NULL;
 	void *result = NULL;
