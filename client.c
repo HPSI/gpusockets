@@ -15,7 +15,7 @@
 #include "protocol.h"
 #include "process.h"
 
-int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr) {
+int init_client(const char *s_ip, const char *s_port, struct addrinfo *s_addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
@@ -81,13 +81,17 @@ int remove_param_from_list(param_node *list, uint32_t param_id) {
 }
 
 void get_server_connection(params *p) {
+	char s_ip[16], s_port[6];
 
-	// TODO: get id from server
 	if (p->id < 0) {
-		p->sock_fd = init_client(getenv("GPUSOCK_SERVER") ?  getenv("GPUSOCK_SERVER") : DEFAULT_SERVER_IP, getenv("GPUSOCK_PORT") ?  getenv("GPUSOCK_PORT") : DEFAULT_SERVER_PORT, &(p->addr));
-		gdprintf("Connected to server %s on port %s...\n", DEFAULT_SERVER_IP, (char *)DEFAULT_SERVER_PORT);
+		if (get_server_ip(s_ip, s_port) != 0) {
+			sprintf(s_ip, DEFAULT_SERVER_IP);
+			sprintf(s_port, DEFAULT_SERVER_PORT);
+			gdprintf("Could not get env vars, using defaults: %s:%s\n", s_ip, s_port);
+		}
+		p->sock_fd = init_client(s_ip, s_port, &(p->addr));
+		gdprintf("Connected to server %s on port %s...\n", s_ip, s_port);
 	}
-
 }
 
 int64_t get_cuda_cmd_result(void **result, int sock_fd) {

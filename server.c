@@ -13,7 +13,7 @@
 #include "protocol.h"
 #include "process.h"
 
-int init_server_net(char * port, struct addrinfo *addr) {
+int init_server_net(const char *port, struct addrinfo *addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
@@ -65,10 +65,9 @@ int main(int argc, char *argv[]) {
 	int server_sock_fd, client_sock_fd, msg_type, resp_type, arg_cnt;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
-	char server_ip[20];
-	char server_port[10];
+	char server_ip[16] /* IPv4 */, server_port[6], *local_port,
+		 client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	socklen_t s;
-    char *local_port, client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
 		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
 	uint32_t msg_length;
@@ -80,11 +79,11 @@ int main(int argc, char *argv[]) {
 
 	if (argc == 1) {
 		printf("No port defined, trying env vars\n");
-		if (get_server_ip(&server_ip, &server_port) == 0)
-			local_port = (char*) server_port;
-		else {
-		printf("No port defined, using default %s\n", DEFAULT_SERVER_PORT);
-		local_port = (char *) DEFAULT_SERVER_PORT;
+		if (get_server_ip(server_ip, server_port) < 2) {
+			local_port = server_port;
+		} else {
+			printf("Could not get env vars, using default %s\n", DEFAULT_SERVER_PORT);
+			local_port = (char *) DEFAULT_SERVER_PORT;
 		}
 	} else {
 		local_port = argv[1];

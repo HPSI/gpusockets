@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 
@@ -42,17 +43,28 @@ inline void *calloc_safe_f(size_t nmemb, size_t size, const char *file, const in
 	return ptr;
 }
 
-int get_server_ip(char **server_ip, char **server_port)
-{
+int get_server_ip(char *server_ip, char *server_port) {
+	const char *gs_server = getenv("GPUSOCK_SERVER"),
+		  *gs_port = getenv("GPUSOCK_PORT");
 
-   sprintf(server_ip, "%s", getenv("GPUSOCK_SERVER"));
-   sprintf(server_port, "%s", getenv("GPUSOCK_PORT"));
+	if (gs_server == NULL) {
+		gs_server = DEFAULT_SERVER_IP;
+		gdprintf("GPUSOCK_SERVER not defined, using default server ip: %s\n", gs_server);
+	}
+	if (gs_port == NULL) {
+		gs_port = DEFAULT_SERVER_PORT;
+		gdprintf("GPUSOCK_PORT not defined, using default server port: %s\n", gs_port);
+	}
 
-   printf("SERVER_IP:%s, %s\n", getenv("GPUSOCK_SERVER"), server_ip);
-   printf("SERVER_PORT:%s, %d\n", getenv("GPUSOCK_PORT"), atoi(server_port));
+	sprintf(server_ip, "%s", gs_server);
+	sprintf(server_port, "%s", gs_port);
 
-   if (*server_ip == NULL || *server_port == NULL)
-	return 1;
-   else
-	return 0;
+	if (server_ip[0] != '\0' && server_port[0] != '\0')
+		return 0;
+	else if (server_port[0] != '\0')
+		return 1;
+	else if (server_ip[0] != '\0')
+		return 2;
+	else
+		return 3;
 }

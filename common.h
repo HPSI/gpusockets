@@ -63,7 +63,7 @@ inline void *realloc_safe_f(void *ptr, size_t size, const char *file, const int 
 inline void *calloc_safe_f(size_t nmemb, size_t size, const char *file, const int line);
 #define calloc_safe(nmemb, size) calloc_safe_f(nmemb, size, __FILE__, __LINE__)
 
-int get_server_ip(char **server_ip, char **server_port);
+int get_server_ip(char *server_ip, char *server_port);
 
 #ifdef GPUSOCK_DEBUG
 #define gdprintf printf

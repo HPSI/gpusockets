@@ -17,7 +17,7 @@ typedef struct params_s {
 } params;
 
 
-int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr);
+int init_client(const char *s_ip, const char *s_port, struct addrinfo *s_addr);
 
 void init_params(params *p);
 
