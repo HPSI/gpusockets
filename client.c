@@ -15,7 +15,7 @@
 #include "protocol.h"
 #include "process.h"
 
-int init_client(char *s_ip, char *s_port, struct addrinfo *s_addr) {
+int init_client(const char *s_ip, const char *s_port, struct addrinfo *s_addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
@@ -81,13 +81,17 @@ int remove_param_from_list(param_node *list, uint32_t param_id) {
 }
 
 void get_server_connection(params *p) {
-	
-	// TODO: get id from server
-	if (p->id < 0) {
-		p->sock_fd = init_client(SERVER_IP, SERVER_PORT, &(p->addr));
-		gdprintf("Connected to server %s on port %s...\n", SERVER_IP, (char *)SERVER_PORT);
-	}
+	char s_ip[16], s_port[6];
 
+	if (p->id < 0) {
+		if (get_server_ip(s_ip, s_port) != 0) {
+			sprintf(s_ip, DEFAULT_SERVER_IP);
+			sprintf(s_port, DEFAULT_SERVER_PORT);
+			gdprintf("Could not get env vars, using defaults: %s:%s\n", s_ip, s_port);
+		}
+		p->sock_fd = init_client(s_ip, s_port, &(p->addr));
+		gdprintf("Connected to server %s on port %s...\n", s_ip, s_port);
+	}
 }
 
 int64_t get_cuda_cmd_result(void **result, int sock_fd) {
@@ -140,7 +144,7 @@ int get_available_gpus(int sock_fd) {
 	send_message(sock_fd, buffer, buf_size);
 	if (buffer != NULL)
 		free(buffer);
-	
+
 	gdprintf("Waiting for response:\n");
 	msg_length = receive_message(&buffer, sock_fd);
 	if (msg_length > 0) {
@@ -164,13 +168,13 @@ int get_available_gpus(int sock_fd) {
 
 	return 0;
 }
-	
+
 int send_cuda_cmd(int sock_fd, var **args, size_t arg_count, int type) {
 	void *buffer = NULL, *payload = NULL;
 	size_t buf_size;
 
 	gdprintf("Sendind CUDA cmd...\n");
-	pack_cuda_cmd(&payload, args, arg_count, type);	
+	pack_cuda_cmd(&payload, args, arg_count, type);
 
 	buf_size = encode_message(&buffer, CUDA_CMD, payload);
 	if (buffer == NULL)

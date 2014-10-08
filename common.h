@@ -29,8 +29,8 @@ typedef struct var_s {
 	void *data;
 } var;
 
-#define SERVER_IP "localhost"
-#define SERVER_PORT "8888"
+#define DEFAULT_SERVER_IP "localhost"
+#define DEFAULT_SERVER_PORT "8888"
 
 enum {
 	CUDA_CMD=0,
@@ -54,14 +54,16 @@ enum {
 	LAUNCH_KERNEL
 };
 
-inline void *malloc_safe_f(size_t size, const char *file, const int line); 
+inline void *malloc_safe_f(size_t size, const char *file, const int line);
 #define malloc_safe(size) malloc_safe_f(size, __FILE__, __LINE__)
 
-inline void *realloc_safe_f(void *ptr, size_t size, const char *file, const int line); 
+inline void *realloc_safe_f(void *ptr, size_t size, const char *file, const int line);
 #define realloc_safe(ptr, size) realloc_safe_f(ptr, size, __FILE__, __LINE__)
 
-inline void *calloc_safe_f(size_t nmemb, size_t size, const char *file, const int line); 
+inline void *calloc_safe_f(size_t nmemb, size_t size, const char *file, const int line);
 #define calloc_safe(nmemb, size) calloc_safe_f(nmemb, size, __FILE__, __LINE__)
+
+int get_server_ip(char *server_ip, char *server_port);
 
 #ifdef GPUSOCK_DEBUG
 #define gdprintf printf

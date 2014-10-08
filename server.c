@@ -9,11 +9,11 @@
 #include <netdb.h>
 
 #include "common.h"
-#include "common.pb-c.h" 
+#include "common.pb-c.h"
 #include "protocol.h"
 #include "process.h"
 
-int init_server_net(char * port, struct addrinfo *addr) {
+int init_server_net(const char *port, struct addrinfo *addr) {
 	int socket_fd, ret;
 	struct addrinfo hints;
 
@@ -65,8 +65,9 @@ int main(int argc, char *argv[]) {
 	int server_sock_fd, client_sock_fd, msg_type, resp_type, arg_cnt;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
+	char server_ip[16] /* IPv4 */, server_port[6], *local_port,
+		 client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	socklen_t s;
-    char *local_port, client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
 		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
 	uint32_t msg_length;
@@ -75,14 +76,19 @@ int main(int argc, char *argv[]) {
 		printf("Usage: server <local_port>\n");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	if (argc == 1) {
-		printf("No port defined, using default %s\n", SERVER_PORT);
-		local_port = (char *) SERVER_PORT;
+		printf("No port defined, trying env vars\n");
+		if (get_server_ip(server_ip, server_port) < 2) {
+			local_port = server_port;
+		} else {
+			printf("Could not get env vars, using default %s\n", DEFAULT_SERVER_PORT);
+			local_port = (char *) DEFAULT_SERVER_PORT;
+		}
 	} else {
 		local_port = argv[1];
 	}
-	
+
 	server_sock_fd = init_server(local_port, &local_addr, &free_list, &busy_list);
 	print_cuda_devices(free_list, busy_list);
 	printf("\nServer listening on port %s for incoming connections...\n", local_port);
@@ -101,7 +107,7 @@ int main(int argc, char *argv[]) {
 					client_host, sizeof(client_host), client_serv,
 					sizeof(client_serv), NI_NUMERICHOST | NI_NUMERICSERV) == 0)
 			printf("from client @%s:%s\n", client_host, client_serv);
-		else 
+		else
 			printf("from unidentified client");
 
 		for(;;) {
@@ -111,7 +117,7 @@ int main(int argc, char *argv[]) {
 
 			printf("Processing message\n");
 			switch (msg_type) {
-				case CUDA_CMD: 
+				case CUDA_CMD:
 					arg_cnt = process_cuda_cmd(&result, payload, free_list, busy_list, &client_list, &client_handle);
 					resp_type = CUDA_CMD_RESULT;
 					break;
@@ -140,7 +146,7 @@ int main(int argc, char *argv[]) {
 				pack_cuda_cmd(&payload, result, arg_cnt, CUDA_CMD_RESULT);
 				msg_length = encode_message(&msg, resp_type, payload);
 				send_message(client_sock_fd, msg, msg_length);
-				
+
 				if (result != NULL) {
 					// should be more freeing here...
 					free(result);
@@ -152,7 +158,7 @@ int main(int argc, char *argv[]) {
 				free(msg);
 				msg = NULL;
 			}
-			
+
 			if (get_client_status(client_handle) == 0) {
 				// TODO: freeing
 				printf("\n--------------\nClient finished.\n\n");
@@ -161,13 +167,13 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	close(client_sock_fd);
-	
+
 	if (free_list != NULL)
 		free_cdn_list(free_list);
 
 	if (busy_list != NULL)
 		free_cdn_list(busy_list);
-	
+
 	if (client_list != NULL)
 		free_cdn_list(client_list);
 

@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 			cmd11 = CUDA_CMD__INIT, cmd12 = CUDA_CMD__INIT,
 			cmd13 = CUDA_CMD__INIT, cmd14 = CUDA_CMD__INIT,
 			cmd15 = CUDA_CMD__INIT;
-	void *buffer = NULL, *file = NULL, *result = NULL; 
+	void *buffer = NULL, *file = NULL, *result = NULL;
 
 	if (argc > 3) {
 		printf("Usage: client <server_ip> <server_port>\n");
@@ -38,19 +38,19 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (argc == 1) {
-		printf("No server ip or port defined, using defaults %s:%s\n", SERVER_IP, SERVER_PORT);
-		server_ip = (char *) SERVER_IP;
-		server_port = (char *) SERVER_PORT;
+		printf("No server ip or port defined, using defaults %s:%s\n", DEFAULT_SERVER_IP, DEFAULT_SERVER_PORT);
+		server_ip = (char *) DEFAULT_SERVER_IP;
+		server_port = (char *) DEFAULT_SERVER_PORT;
 	} else if (argc == 2) {
-		printf("No server port defined, using default %s\n", SERVER_PORT);
+		printf("No server port defined, using default %s\n", DEFAULT_SERVER_PORT);
 		server_ip = argv[1];
-		server_port = (char *) SERVER_PORT;
+		server_port = (char *) DEFAULT_SERVER_PORT;
 	} else {
 		server_ip = argv[1];
 		server_port = argv[2];
 	}
 
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 	printf("Connected to server %s on port %s...\n", server_ip, server_port);
 
 	/**
@@ -73,12 +73,12 @@ int main(int argc, char *argv[]) {
 	send_message(client_sock_fd, buffer, buf_size);
 
 	free(cmd1.int_args);
-	free(buffer);	
+	free(buffer);
 	get_cuda_cmd_result(&result, client_sock_fd);
 	dev_ptr = *(uint64_t *) result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd2
@@ -98,11 +98,11 @@ int main(int argc, char *argv[]) {
 	ctx_ptr = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd3
-	 **/	
+	 **/
 	printf("\n* MODULE_LOAD\n");
 	cmd3.type = MODULE_LOAD;
 	cmd3.arg_count = 1;
@@ -125,11 +125,11 @@ int main(int argc, char *argv[]) {
 	mod_ptr = *(uint64_t *) result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd4
-	 **/	
+	 **/
 	printf("\n* MODULE_GET_FUNCTION\n");
 	cmd4.type = MODULE_GET_FUNCTION;
 	cmd4.arg_count = 2;
@@ -150,11 +150,11 @@ int main(int argc, char *argv[]) {
 	func_ptr = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd5
-	 **/	
+	 **/
 	printf("\n* MEMORY_ALLOCATE 1\n");
 	cmd5.type = MEMORY_ALLOCATE;
 	cmd5.arg_count = 1;
@@ -171,11 +171,11 @@ int main(int argc, char *argv[]) {
 	ptr1 = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd6
-	 **/	
+	 **/
 	printf("\n* MEMORY_ALLOCATE 2\n");
 	cmd6.type = MEMORY_ALLOCATE;
 	cmd6.arg_count = 1;
@@ -192,11 +192,11 @@ int main(int argc, char *argv[]) {
 	ptr2 = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd7
-	 **/	
+	 **/
 	printf("\n* MEMORY_ALLOCATE 3\n");
 	cmd7.type = MEMORY_ALLOCATE;
 	cmd7.arg_count = 1;
@@ -213,11 +213,11 @@ int main(int argc, char *argv[]) {
 	ptr3 = *(uint64_t *)result;
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd8
-	 **/	
+	 **/
 	printf("\n* MEMCPY_HOST_TO_DEV 1\n");
 	cmd8.type = MEMCPY_HOST_TO_DEV;
 	cmd8.arg_count = 2;
@@ -239,11 +239,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd9
-	 **/	
+	 **/
 	printf("\n* MEMCPY_HOST_TO_DEV 2\n");
 	cmd9.type = MEMCPY_HOST_TO_DEV;
 	cmd9.arg_count = 2;
@@ -265,11 +265,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd10
-	 **/	
+	 **/
 	printf("\n* LAUNCH_KERNEL\n");
 	cmd10.type = LAUNCH_KERNEL;
 	cmd10.arg_count = 12;
@@ -302,11 +302,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd11
-	 **/	
+	 **/
 	printf("\n* MEMCPY_DEV_TO_HOST\n");
 	cmd11.type = MEMCPY_DEV_TO_HOST;
 	cmd11.arg_count = 2;
@@ -325,11 +325,11 @@ int main(int argc, char *argv[]) {
 	printf("\nExecution result: %d\n\n", test_res);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd12
-	 **/	
+	 **/
 	printf("\n* MEMORY_FREE 1\n");
 	cmd12.type = MEMORY_FREE;
 	cmd12.arg_count = 1;
@@ -345,11 +345,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd13
-	 **/	
+	 **/
 	printf("\n* MEMORY_FREE 2\n");
 	cmd13.type = MEMORY_FREE;
 	cmd13.arg_count = 1;
@@ -365,11 +365,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd14
-	 **/	
+	 **/
 	printf("\n* MEMORY_FREE 3\n");
 	cmd14.type = MEMORY_FREE;
 	cmd14.arg_count = 1;
@@ -385,11 +385,11 @@ int main(int argc, char *argv[]) {
 	get_cuda_cmd_result(&result, client_sock_fd);
 	// --
 	close(client_sock_fd);
-	client_sock_fd = init_client(server_ip, server_port, &server_addr);	
+	client_sock_fd = init_client(server_ip, server_port, &server_addr);
 
 	/**
 	 * cmd15
-	 **/	
+	 **/
 	printf("\n* CONTEXT_DESTROY\n");
 	cmd15.type = CONTEXT_DESTROY;
 	cmd15.arg_count = 1;
