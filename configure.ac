@@ -31,7 +31,6 @@ AC_PROG_CXX
 
 AM_SILENT_RULES([no])
 
-AM_INIT_AUTOMAKE([serial-tests])
 AC_ARG_WITH([cuda],
    [AS_HELP_STRING(
         [--with-cuda=PATH],
