@@ -3,6 +3,8 @@ VERSION=0.1.0
 AC_INIT(gpusockets, 0.1.0)
 AC_CONFIG_SRCDIR([src])
 
+CFLAGS=-g
+CXXFLAGS=-g
 AM_INIT_AUTOMAKE
 
 AC_ARG_WITH([protobuf-c-libdir],
