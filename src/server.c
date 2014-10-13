@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <netdb.h>
 
+#define TIMERS_ENABLED
 #include "common.h"
 #include "common.pb-c.h"
 #include "protocol.h"
@@ -71,6 +72,7 @@ int main(int argc, char *argv[]) {
 	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
 		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
 	uint32_t msg_length;
+	timers_t tm;
 
 	if (argc > 2) {
 		printf("Usage: server <local_port>\n");
@@ -110,12 +112,14 @@ int main(int argc, char *argv[]) {
 		else
 			printf("from unidentified client");
 
+		TIMER_RESET(&tm);
 		for(;;) {
 			msg_length = receive_message(&msg, client_sock_fd);
 			if (msg_length > 0)
 				msg_type = decode_message(&dec_msg, &payload, msg, msg_length);
 
 			printf("Processing message\n");
+			TIMER_START(&tm);
 			switch (msg_type) {
 				case CUDA_CMD:
 					arg_cnt = process_cuda_cmd(&result, payload, free_list, busy_list, &client_list, &client_handle);
@@ -154,6 +158,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 			printf(">>\nMessage processed, cleaning up...\n<<\n");
+			TIMER_STOP(&tm);
 			if (msg != NULL) {
 				free(msg);
 				msg = NULL;
@@ -165,6 +170,7 @@ int main(int argc, char *argv[]) {
 				break;
 			}
 		}
+	printf("message needed %lf to be processed\n", TICKS_TO_USEC(TIMER_TOTAL(&tm)));
 	}
 	close(client_sock_fd);
 
