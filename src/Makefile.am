@@ -11,7 +11,7 @@ BUILT_SOURCES = @srcdir@/common.pb-c.c @srcdir@/common.pb-c.h
 server_SOURCES = server.c process.c process.h common.h common.c protocol.c protocol.h list.h cuda_errors.h
 server_SOURCES += common.pb-c.c common.pb-c.h
 
-libcudawrapper_so_CFLAGS = -fPIC -shared
+libcudawrapper_so_CFLAGS = -fPIC -shared $(DEBUG_CFLAGS)
 libcudawrapper_so_CFLAGS +=  -L$(CUDA_INSTALL_PATH)/lib -I$(CUDA_INSTALL_PATH)/include
 libcudawrapper_so_SOURCES = libcudawrapper.c process.c process.h common.h common.c protocol.c protocol.h list.h cuda_errors.h client.h client.c
 libcudawrapper_so_SOURCES += common.pb-c.c common.pb-c.h
