@@ -1,0 +1,10 @@
+Makefile.in
+aclocal.m4
+autogen.sh
+autom4te.cache/
+compile
+configure
+depcomp
+install-sh
+missing
+src/Makefile.in
