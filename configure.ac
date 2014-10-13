@@ -13,6 +13,12 @@ AC_ARG_WITH([protobuf-c-libdir],
     [PROTOBUF_C_LIBDIR="$withval"],
     [PROTOBUF_C_LIBDIR='/usr/lib'])
 
+AC_ARG_ENABLE([debug],
+ [AS_HELP_STRING([--enable-debug], [Enable debug print messages. This is a debugging feature which should not be usually enabled])],
+ [DEBUG_CFLAGS="-DGPUSOCK_DEBUG"])
+
+AC_SUBST(DEBUG_CFLAGS)
+
 #AX_LIB_PROTOBUF_C([0.14])
 
 AC_CHECK_LIB([protobuf-c], [main], [], [AC_MSG_ERROR([cannot find protobuf library])])

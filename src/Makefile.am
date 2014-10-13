@@ -2,7 +2,8 @@ bin_PROGRAMS = server libcudawrapper.so #test-cuda test-client
 
 
 CYCLES_PER_SEC = `cat /proc/cpuinfo |grep cpu\ MHz | head -1 | cut -d\: -f2 | awk '{ print $$1 * 1000 }'`
-AM_CFLAGS = -I$(PROTOBUF_C_CFLAGS) -L$(PROTOBUF_C_LIBDIR) -L$(CUDA) -I@builddir@ -I/usr/include/google -L$(CUDA_INSTALL_PATH)/lib -I$(CUDA_INSTALL_PATH)/include -DCYCLES_PER_SEC=$(CYCLES_PER_SEC)
+
+AM_CFLAGS = -I$(PROTOBUF_C_CFLAGS) -L$(PROTOBUF_C_LIBDIR) -L$(CUDA) -I@builddir@ -I/usr/include/google -L$(CUDA_INSTALL_PATH)/lib -I$(CUDA_INSTALL_PATH)/include -DCYCLES_PER_SEC=$(CYCLES_PER_SEC) $(DEBUG_CFLAGS)
 
 
 BUILT_SOURCES = @srcdir@/common.pb-c.c @srcdir@/common.pb-c.h
