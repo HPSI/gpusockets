@@ -10,6 +10,7 @@ typedef struct cuda_device_node_s {
 	CUdevice *cuda_device;
 	struct list_head node;
 	char cuda_device_name[CUDA_DEV_NAME_MAX];
+	unsigned int client_count;
 	int is_busy;
 } cuda_device_node;
 
@@ -22,7 +23,7 @@ typedef struct param_node_s {
 
 typedef struct client_node_s {
 	int id;
-	int dev_count;
+	unsigned int dev_count;
 	unsigned int status;
 	struct list_head node;
 	param_node *cuda_dev_node;
@@ -36,7 +37,7 @@ int discover_cuda_devices(void **free_list, void **busy_list);
 
 void print_cuda_devices(void *free_list, void *busy_list);
 
-void print_clients(void *client_list); 
+void print_clients(void *client_list);
 
 unsigned int get_client_status(void *client_handle);
 
@@ -52,6 +53,6 @@ int process_cuda_device_query(void **result, void *free_list, void *busy_list);
 
 void free_cdn_list(void *list);
 
-int pack_cuda_cmd(void **payload, var **args, size_t arg_count, int type); 
+int pack_cuda_cmd(void **payload, var **args, size_t arg_count, int type);
 
 #endif /* PROCESS_H */
