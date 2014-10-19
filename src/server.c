@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -12,6 +13,122 @@
 #include "common.pb-c.h"
 #include "protocol.h"
 #include "process.h"
+
+
+void *free_list=NULL, *busy_list=NULL, *client_list=NULL;
+void *connection_handler(void*);
+
+void *connection_handler(void *socket_desc)
+{
+    //Get the socket descriptor
+    int sock = *(int*)socket_desc;
+    int read_size;
+    char *message , client_message[2000];
+
+    //Send some messages to the client
+    message = "Greetings! I am your connection handler\n";
+    printf("Greetings! I am your connection handler\n");
+    write(sock , message , strlen(message));
+
+    message = "Now type something and i shall repeat what you type \n";
+    write(sock , message , strlen(message));
+
+    //Receive a message from client
+    while( (read_size = recv(sock , client_message , 2000 , 0)) > 0 )
+    {
+        //Send the message back to client
+        write(sock , client_message , strlen(client_message));
+    }
+
+    if(read_size == 0)
+    {
+        puts("Client disconnected");
+        fflush(stdout);
+    }
+    else if(read_size == -1)
+    {
+        perror("recv failed");
+    }
+
+    //Free the socket pointer
+    free(socket_desc);
+
+    return 0;
+}
+
+void *connection_handler2(void *socket_desc)
+{
+	int client_sock_fd = *(int*)socket_desc;
+	int msg_type, resp_type, arg_cnt;
+	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
+                 //*free_list=NULL, *busy_list=NULL, *client_list=NULL,
+	*client_handle=NULL;
+	uint32_t msg_length;
+
+
+	for (;;) {
+		msg_length = receive_message(&msg, client_sock_fd);
+		if (msg_length > 0)
+			msg_type = decode_message(&dec_msg, &payload,
+						  msg, msg_length);
+
+		printf("Processing message\n");
+		switch (msg_type) {
+		case CUDA_CMD:
+			arg_cnt = process_cuda_cmd(&result,
+						   payload, free_list,
+						   busy_list, &client_list,
+						   &client_handle);
+			resp_type = CUDA_CMD_RESULT;
+			break;
+		case CUDA_DEVICE_QUERY:
+			process_cuda_device_query(&result,
+						  free_list, busy_list);
+			resp_type = CUDA_DEVICE_LIST;
+			break;
+		}
+
+		print_clients(client_list);
+		print_cuda_devices(free_list, busy_list);
+
+		if (msg != NULL) {
+			free(msg);
+			msg = NULL;
+		}
+		if (dec_msg != NULL) {
+			free_decoded_message(dec_msg);
+			dec_msg = NULL;
+			// payload should be invalid now
+			payload = NULL;
+		}
+
+		if (resp_type != -1) {
+			gdprintf("Sending result\n");
+			pack_cuda_cmd(&payload, result, arg_cnt,
+				      CUDA_CMD_RESULT);
+			msg_length = encode_message(&msg, resp_type, payload);
+			send_message(client_sock_fd, msg, msg_length);
+
+			if (result != NULL) {
+				// should be more freeing here...
+				free(result);
+				result = NULL;
+			}
+		}
+		printf(">>\nMessage processed, cleaning up...\n<<\n");
+		if (msg != NULL) {
+			free(msg);
+			msg = NULL;
+		}
+
+		if (get_client_status(client_handle) == 0) {
+			// TODO: freeing
+			printf("\n--------------\nClient finished.\n\n");
+			break;
+		}
+	}
+}
+
 
 int init_server_net(const char *port, struct addrinfo *addr) {
 	int socket_fd, ret;
@@ -62,15 +179,17 @@ int init_server(char *port, struct addrinfo *addr, void **free_list, void **busy
 }
 
 int main(int argc, char *argv[]) {
-	int server_sock_fd, client_sock_fd, msg_type, resp_type, arg_cnt;
+	int server_sock_fd, client_sock_fd, msg_type, resp_type, arg_cnt, *new_sock;
 	struct sockaddr_in client_addr;
 	struct addrinfo local_addr;
 	char server_ip[16] /* IPv4 */, server_port[6], *local_port,
 		 client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	socklen_t s;
 	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
-		 *free_list=NULL, *busy_list=NULL, *client_list=NULL, *client_handle=NULL;
+		// *free_list=NULL, *busy_list=NULL, *client_list=NULL,
+	*client_handle=NULL;
 	uint32_t msg_length;
+	pthread_t sniffer_thread;
 
 	if (argc > 2) {
 		printf("Usage: server <local_port>\n");
@@ -109,7 +228,14 @@ int main(int argc, char *argv[]) {
 			printf("from client @%s:%s\n", client_host, client_serv);
 		else
 			printf("from unidentified client");
+		new_sock = malloc(1);
+		*new_sock = client_sock_fd;
+		if (pthread_create(&sniffer_thread, NULL, connection_handler2, (void*)new_sock) < 0) {
+			fprintf(stderr, "could not create thread\n");
+			return 1;
+		}
 
+#if 0
 		for(;;) {
 			msg_length = receive_message(&msg, client_sock_fd);
 			if (msg_length > 0)
@@ -165,6 +291,7 @@ int main(int argc, char *argv[]) {
 				break;
 			}
 		}
+#endif
 	}
 	close(client_sock_fd);
 

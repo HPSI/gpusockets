@@ -35,6 +35,9 @@ AC_ARG_WITH([protoc-c],
     [PROTOC_C='protoc-c'])
 AC_SUBST([PROTOC_C])
 
+AC_CHECK_LIB(pthread, pthread_create, [PTHREAD_LIBS+=-lpthread])
+AC_SUBST([PTHREAD_LIBS])
+
 AC_PROG_CXX
 
 AM_SILENT_RULES([no])
