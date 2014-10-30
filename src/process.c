@@ -397,8 +397,7 @@ int attach_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 					dev_node->cuda_device_name, dev_node->cuda_device);
 			list_move_tail(&dev_node->node, &busy_list->node);
 			*/
-			if (dev_node->is_busy != 1)
-				dev_node->is_busy = 1;
+			dev_node->is_busy = 1;
 			++client->dev_count;
 			++dev_node->client_count;
 

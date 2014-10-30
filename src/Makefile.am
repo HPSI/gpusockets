@@ -27,7 +27,7 @@ common.pb-c.h: @srcdir@/common.pb-c.c
 
 CLEANFILES = @builddir@/common.pb-c.c @builddir@/common.pb-c.h
 
-server_LDADD = $(PROTOBUF_C_LIBS) $(CUDA_LIBS) -lcuda
+server_LDADD = $(PROTOBUF_C_LIBS) $(CUDA_LIBS) -lcuda $(PTHREAD_LIBS)
 libcudawrapper_so_LDADD = $(PROTOBUF_C_LIBS) $(CUDA_LIBS) -lcuda -ldl
 
 EXTRA_DIST = common.proto
