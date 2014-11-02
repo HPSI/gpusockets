@@ -15,14 +15,14 @@
 #include "process.h"
 
 
-void *free_list=NULL, *busy_list=NULL, *client_list=NULL;
+void *free_list=NULL, *busy_list=NULL;
+client_node *client_list=NULL;
 
 void *connection_handler(void *socket_desc) {
-	int client_sock_fd = *(int*)socket_desc;
+	int client_sock_fd = *(int *) socket_desc, client_id = -1;
 	int msg_type, resp_type, arg_cnt;
-	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
-                 //*free_list=NULL, *busy_list=NULL, *client_list=NULL,
-	*client_handle=NULL;
+	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL;
+	client_node *client_handle=NULL;
 	uint32_t msg_length;
 
 
@@ -81,9 +81,12 @@ void *connection_handler(void *socket_desc) {
 			msg = NULL;
 		}
 
+		if (client_id == -1)
+			client_id = client_handle->id;
+
 		if (get_client_status(client_handle) == 0) {
 			// TODO: freeing
-			printf("\n--------------\nClient finished.\n\n");
+			printf("\n--------------\nClient %d finished.\n\n", client_id);
 			break;
 		}
 	}
@@ -145,9 +148,7 @@ int main(int argc, char *argv[]) {
 	char server_ip[16] /* IPv4 */, server_port[6], *local_port,
 		 client_host[NI_MAXHOST], client_serv[NI_MAXSERV];
 	socklen_t s;
-	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL,
-		// *free_list=NULL, *busy_list=NULL, *client_list=NULL,
-	*client_handle=NULL;
+	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL;
 	uint32_t msg_length;
 	pthread_t sniffer_thread;
 
@@ -188,9 +189,10 @@ int main(int argc, char *argv[]) {
 			printf("from client @%s:%s\n", client_host, client_serv);
 		else
 			printf("from unidentified client");
-		new_sock = malloc(1);
+
+		new_sock = malloc_safe(sizeof(*new_sock));
 		*new_sock = client_sock_fd;
-		if (pthread_create(&sniffer_thread, NULL, connection_handler, (void*)new_sock) < 0) {
+		if (pthread_create(&sniffer_thread, NULL, connection_handler, (void *)new_sock) < 0) {
 			fprintf(stderr, "could not create thread\n");
 			return 1;
 		}

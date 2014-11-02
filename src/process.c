@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 #include "process.h"
 #include "common.h"
@@ -48,6 +49,8 @@ inline CUresult cuda_error_print(CUresult result, int exit_flag, const char *fil
 
 	return result;
 }
+
+static pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 size_t read_cuda_module_file(void **buffer, const char *filename) {
 	size_t b_read = 0;
@@ -156,7 +159,6 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 	CUdevice *cuda_device;
 
 	cuda_device = malloc_safe(sizeof(CUdevice));
-
 	cuda_dev_node = malloc_safe(sizeof(*cuda_dev_node));
 
 	if (cuda_err_print(cuDeviceGet(cuda_device, dev_id), 0) != CUDA_SUCCESS)
@@ -166,8 +168,9 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 		return -1;
 
 	cuda_dev_node->cuda_device = cuda_device;
-	memcpy(cuda_dev_node->cuda_device_name, cuda_dev_name, CUDA_DEV_NAME_MAX);
+	strcpy(cuda_dev_node->cuda_device_name, cuda_dev_name);
 	cuda_dev_node->is_busy = 0;
+	cuda_dev_node->client_count = 0;
 
 	fprintf(stdout, "Adding device [%d]@%p -> %s\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name);
 
@@ -225,7 +228,7 @@ void print_cuda_devices(void *free_list, void *busy_list) {
 	}
 }
 
-int add_client_to_list(void **client_handle, client_node *client_list) {
+int add_client_to_list(client_node **client_handle, client_node *client_list) {
 	client_node *new_node, *tmp;
 
 	new_node = malloc_safe(sizeof(*new_node));
@@ -236,6 +239,7 @@ int add_client_to_list(void **client_handle, client_node *client_list) {
 	} else {
 		new_node->id = 0;
 	}
+
 	new_node->dev_count = 0;
 	new_node->status = 1;
 	new_node->cuda_dev_node = NULL;
@@ -245,12 +249,14 @@ int add_client_to_list(void **client_handle, client_node *client_list) {
 	list_add_tail(&new_node->node, &client_list->node);
 
 	*client_handle = new_node;
+
 	return 0;
 }
 
-int get_client_handle(void **client_handle, void **client_list, int client_id) {
+int get_client_handle(client_node **client_handle, client_node **client_list, int client_id) {
 	client_node *client_list_p = *client_list, *pos;
 
+	pthread_mutex_lock(&client_mutex);
 	if (client_list_p == NULL) {
 		init_client_list(&client_list_p);
 		*client_list = client_list_p;
@@ -266,31 +272,36 @@ int get_client_handle(void **client_handle, void **client_list, int client_id) {
 	}
 
 	add_client_to_list(client_handle, client_list_p);
+	pthread_mutex_unlock(&client_mutex);
 
 	return 0;
 }
 
-int del_client_of_list(void *client_handle) {
+int del_client_of_list(client_node *client_handle) {
 	client_node *client = client_handle;
 
+	pthread_mutex_lock(&client_mutex);
 	gdprintf("Deleting client <%d> from list\n", client->id);
 	list_del(&client->node);
+	pthread_mutex_unlock(&client_mutex);
 	free(client_handle);
 
 	return 0;
 }
 
-void print_clients(void *client_list) {
+void print_clients(client_node *client_list) {
 	client_node *client_list_p=client_list, *pos;
 	int i = 0;
 
+	pthread_mutex_lock(&client_mutex);
 	gdprintf("\nClients:\n");
 	list_for_each_entry(pos, &client_list_p->node, node) {
 		gdprintf("| [%d] <%d>\n", i++, pos->id);
 	}
+	pthread_mutex_unlock(&client_mutex);
 }
 
-unsigned int get_client_status(void *client_handle) {
+unsigned int get_client_status(client_node *client_handle) {
 	client_node *client = client_handle;
 
 	return (client_handle == NULL) ? 0 : client->status;
@@ -383,6 +394,7 @@ int attach_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 	param_node *pos;
 	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 
+	pthread_mutex_lock(&client_mutex);
 	gdprintf("Attaching device @%p to client <%d> ...\n", cuda_device, client->id);
 
 	list_for_each_entry(pos, &client->cuda_dev_node->node, node) {
@@ -400,10 +412,12 @@ int attach_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 			dev_node->is_busy = 1;
 			++client->dev_count;
 			++dev_node->client_count;
+			pthread_mutex_unlock(&client_mutex);
 
 			return 0;
 		}
 	}
+	pthread_mutex_unlock(&client_mutex);
 
 	fprintf(stderr, "Requested CUDA device not in client's list!\n");
 	return -1;
@@ -414,6 +428,7 @@ int detach_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cu
 	param_node *pos, *tmp;
 	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 
+	pthread_mutex_lock(&client_mutex);
 	gdprintf("Detaching device @%p from client <%d>...\n", cuda_device, client->id);
 
 	list_for_each_entry_safe(pos, tmp, &client->cuda_dev_node->node, node) {
@@ -429,10 +444,12 @@ int detach_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cu
 			--dev_node->client_count;
 			if (dev_node->client_count == 0)
 				dev_node->is_busy = 0;
+			pthread_mutex_unlock(&client_mutex);
 
 			return 0;
 		}
 	}
+	pthread_mutex_unlock(&client_mutex);
 
 	fprintf(stderr, "Requested CUDA device not in client's list!\n");
 	return -1;
@@ -640,7 +657,7 @@ int launch_kernel_of_client(uint64_t *uints, size_t n_uints, ProtobufCBinaryData
 	return res;
 }
 
-int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, void **client_list, void **client_handle) {
+int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_list, client_node **client_list, client_node **client_handle) {
 	int cuda_result = 0, arg_count = 0;
 	CudaCmd *cmd = cmd_ptr;
 	uint64_t uint_res = 0, tmp_ptr = 0;
@@ -659,7 +676,7 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 		case INIT:
 			gdprintf("Executing cuInit...\n");
 			get_client_handle(client_handle, client_list, cmd->int_args[0]);
-			uint_res = ((client_node *) *client_handle)->id;
+			uint_res = (*client_handle)->id;
 			// cuInit() should have already been executed by the server
 			// by that point...
 			//cuda_result = cuda_err_print(cuInit(cmd->uint_args[0]), 0);
@@ -702,7 +719,6 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 				if (cmd->n_uint_args > 1 && cmd->uint_args[1] == 1) {
 					del_client_of_list(*client_handle);
 					*client_handle = NULL;
-					//((client_node *) *client_handle)->status = 0;
 				}
 			}
 			break;
