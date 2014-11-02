@@ -157,6 +157,7 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 	cuda_device_node *cuda_dev_node;
 	char cuda_dev_name[CUDA_DEV_NAME_MAX];
 	CUdevice *cuda_device;
+	CUcontext *cuda_context;
 
 	cuda_device = malloc_safe(sizeof(CUdevice));
 	cuda_dev_node = malloc_safe(sizeof(*cuda_dev_node));
@@ -167,12 +168,20 @@ int add_device_to_list(cuda_device_node *dev_list, int dev_id) {
 	if (cuda_err_print(cuDeviceGetName(cuda_dev_name, CUDA_DEV_NAME_MAX, *cuda_device), 0) != CUDA_SUCCESS)
 		return -1;
 
+	cuda_context = malloc_safe(sizeof(*cuda_context));
+	// Initializing per device context.
+	// FIXME(?): We are ignoring client flags...
+	if (cuda_err_print(cuCtxCreate(cuda_context, 0, *cuda_device), 0) != CUDA_SUCCESS)
+		return -1;
+
 	cuda_dev_node->cuda_device = cuda_device;
 	strcpy(cuda_dev_node->cuda_device_name, cuda_dev_name);
+	cuda_dev_node->cuda_context = cuda_context;
 	cuda_dev_node->is_busy = 0;
 	cuda_dev_node->client_count = 0;
 
-	fprintf(stdout, "Adding device [%d]@%p -> %s\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name);
+
+	fprintf(stdout, "Adding device [%d]@%p -> %s, with context @%p\n", dev_id, cuda_dev_node->cuda_device, cuda_dev_node->cuda_device_name, cuda_dev_node->cuda_context);
 
 	list_add_tail(&cuda_dev_node->node, &dev_list->node);
 
@@ -243,7 +252,6 @@ int add_client_to_list(client_node **client_handle, client_node *client_list) {
 	new_node->dev_count = 0;
 	new_node->status = 1;
 	new_node->cuda_dev_node = NULL;
-	new_node->cuda_context = NULL;
 
 	gdprintf("Adding client <%d> to list\n", new_node->id);
 	list_add_tail(&new_node->node, &client_list->node);
@@ -264,7 +272,7 @@ int get_client_handle(client_node **client_handle, client_node **client_list, in
 		// check if client exists in list
 		list_for_each_entry(pos, &client_list_p->node, node) {
 			if (pos->id == client_id) {
-				printf("Client <%d> is already in the list\n", client_id);
+				gdprintf("Client <%d> is already in the list\n", client_id);
 				*client_handle = pos;
 				return 0;
 			}
@@ -314,7 +322,7 @@ uint32_t add_param_to_list(param_node **list, uint64_t uintptr, void *relation) 
 	if (*list == NULL)
 		init_param_list(list);
 	else {
-		// TODO: (?) generate unique random id
+		// TODO(?): generate unique random id
 		tmp = list_last_entry(&((*list)->node), param_node, node);
 		param_id = tmp->id + 1;
 	}
@@ -362,7 +370,7 @@ int del_param_of_list(param_node *param) {
 	return 0;
 }
 
-int update_devices_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, int dev_ordinal, client_node *client) {
+int update_devices_of_client(uintptr_t *dev_node_ptr, cuda_device_node *free_list, int dev_ordinal, client_node *client) {
 	cuda_device_node *tmp;
 	int i = 0, true_ordinal;
 
@@ -382,33 +390,22 @@ int update_devices_of_client(uintptr_t *dev_ptr, cuda_device_node *free_list, in
 		}
 	}
 
-	*dev_ptr = (uintptr_t) tmp->cuda_device;
+	*dev_node_ptr = (uintptr_t) tmp;
 	// TODO: What if client deviceGets the same ordinal twice?
 	add_param_to_list(&client->cuda_dev_node, (uintptr_t) tmp, NULL);
 
 	return 0;
 }
 
-int attach_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
-	cuda_device_node *dev_node;
+int attach_device_to_client(uintptr_t dev_node_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
+	cuda_device_node *dev_node = (cuda_device_node *) dev_node_ptr;
 	param_node *pos;
-	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 
 	pthread_mutex_lock(&client_mutex);
-	gdprintf("Attaching device @%p to client <%d> ...\n", cuda_device, client->id);
+	gdprintf("Attaching device @%p to client <%d> ...\n", dev_node->cuda_device, client->id);
 
 	list_for_each_entry(pos, &client->cuda_dev_node->node, node) {
-		dev_node = (cuda_device_node *) pos->ptr;
-		if (dev_node->cuda_device == cuda_device) {
-			/*
-			if (dev_node->is_busy == 1) {
-				fprintf(stderr, "Requested CUDA device is busy\n");
-				return -2;
-			}
-			gdprintf("Moving device <%s>@%p to busy list\n",
-					dev_node->cuda_device_name, dev_node->cuda_device);
-			list_move_tail(&dev_node->node, &busy_list->node);
-			*/
+		if ((cuda_device_node *) pos->ptr == dev_node) {
 			dev_node->is_busy = 1;
 			++client->dev_count;
 			++dev_node->client_count;
@@ -423,22 +420,15 @@ int attach_device_to_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda
 	return -1;
 }
 
-int detach_device_from_client(uintptr_t dev_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
-	cuda_device_node *dev_node;
+int detach_device_from_client(uintptr_t dev_node_ptr, cuda_device_node *free_list, cuda_device_node *busy_list, client_node *client) {
+	cuda_device_node *dev_node = (cuda_device_node *) dev_node_ptr;
 	param_node *pos, *tmp;
-	CUdevice *cuda_device = (CUdevice *) dev_ptr;
 
 	pthread_mutex_lock(&client_mutex);
-	gdprintf("Detaching device @%p from client <%d>...\n", cuda_device, client->id);
+	gdprintf("Detaching device @%p from client <%d>...\n", dev_node->cuda_device, client->id);
 
 	list_for_each_entry_safe(pos, tmp, &client->cuda_dev_node->node, node) {
-		dev_node = (cuda_device_node *) pos->ptr;
-		if (dev_node->cuda_device == cuda_device) {
-			/*
-			gdprintf("Moving device <%s>@%p to free list\n",
-					dev_node->cuda_device_name, dev_node->cuda_device);
-			list_move_tail(&dev_node->node, &free_list->node);
-			*/
+		if ((cuda_device_node *) pos->ptr == dev_node) {
 			del_param_of_list(pos);
 			--client->dev_count;
 			--dev_node->client_count;
@@ -483,47 +473,25 @@ int get_device_name_for_client(void **host_name_ptr, size_t *host_name_size, int
 }
 
 
-int create_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, uintptr_t dev_ptr, client_node *client) {
-	CUcontext *cuda_context;
-	CUdevice *cuda_device = (CUdevice *) dev_ptr;
-	CUresult res = 0;
+int get_context_of_client(uintptr_t *ctx_ptr, unsigned int flags, uintptr_t dev_node_ptr, client_node *client) {
+	cuda_device_node *dev_node = (cuda_device_node *) dev_node_ptr;
+	CUresult res;
 
-	cuda_context = malloc_safe(sizeof(CUcontext));
-
-	// TODO: support more than one contexts per client.
-	gdprintf("Creating CUDA context of client <%d> ... ", client->id);
-
-	res = cuda_err_print(cuCtxCreate(cuda_context, flags, *cuda_device), 0);
-
-	if (res == CUDA_SUCCESS) {
-		*ctx_ptr = (uintptr_t) cuda_context;
-		add_param_to_list(&client->cuda_context, (uintptr_t) cuda_context, cuda_device);
-		gdprintf("created @%p ... Done\n", cuda_context);
-	} else {
-		gdprintf("failed ... Done\n");
-	}
+	gdprintf("Getting CUDA context @%p of client <%d> ...\n", dev_node->cuda_context, client->id);
+	res = cuda_err_print(cuCtxSetCurrent(*dev_node->cuda_context), 0);
+	*ctx_ptr = dev_node_ptr;
 
 	return res;
 }
 
-int destroy_context_of_client(uintptr_t *dev_ptr, uintptr_t ctx_ptr, client_node *client) {
-	CUresult res = 0;
-	CUcontext *cuda_context = (CUcontext *) ctx_ptr;
-	param_node *param = NULL;
+int put_context_of_client(uintptr_t *dev_node_ptr, uintptr_t ctx_ptr, client_node *client) {
+	CUresult res;
+	cuda_device_node *dev_node = (cuda_device_node *) ctx_ptr;
 
 	// TODO: free modules/functions allocated handles (?)
-	gdprintf("Destroying CUDA context @%p of client <%d> ...\n", cuda_context, client->id);
-
-	res = cuda_err_print(cuCtxDestroy(*cuda_context), 0);
-
-	if (res == CUDA_SUCCESS) {
-		if (find_param_by_ptr(&param, client->cuda_context, ctx_ptr) != 0) {
-			fprintf(stderr, "Requested param not in given list!\n");
-		} else {
-			*dev_ptr = (uintptr_t) param->rel;
-			del_param_of_list(param);
-		}
-	}
+	gdprintf("Putting CUDA context @%p of client <%d> ...\n", dev_node->cuda_context, client->id);
+	res = cuda_err_print(cuCtxSetCurrent(NULL), 0);
+	*dev_node_ptr = ctx_ptr;
 
 	return res;
 }
@@ -707,13 +675,13 @@ int process_cuda_cmd(void **result, void *cmd_ptr, void *free_list, void *busy_l
 			if (cuda_result	< 0)
 				break; // Handle appropriately in client.
 
-			cuda_result = create_context_of_client(&uint_res, cmd->uint_args[0], cmd->uint_args[1], *client_handle);
+			cuda_result = get_context_of_client(&uint_res, cmd->uint_args[0], cmd->uint_args[1], *client_handle);
 			res_type = UINT;
 			break;
 		case CONTEXT_DESTROY:
 			gdprintf("Executing cuCtxDestroy...\n");
 			// We assume that only one context per device is created
-			cuda_result = destroy_context_of_client(&tmp_ptr, cmd->uint_args[0], *client_handle);
+			cuda_result = put_context_of_client(&tmp_ptr, cmd->uint_args[0], *client_handle);
 			if (cuda_result == CUDA_SUCCESS) {
 				detach_device_from_client(tmp_ptr, free_list, busy_list, *client_handle);
 				if (cmd->n_uint_args > 1 && cmd->uint_args[1] == 1) {

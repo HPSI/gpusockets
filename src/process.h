@@ -17,6 +17,7 @@ typedef struct cuda_device_node_s {
 	CUdevice *cuda_device;
 	struct list_head node;
 	char cuda_device_name[CUDA_DEV_NAME_MAX];
+	CUcontext *cuda_context;
 	unsigned int client_count;
 	int is_busy;
 } cuda_device_node;
@@ -27,7 +28,6 @@ typedef struct client_node_s {
 	unsigned int status;
 	struct list_head node;
 	param_node *cuda_dev_node;
-	param_node *cuda_context;
 } client_node;
 
 
