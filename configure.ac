@@ -16,8 +16,18 @@ AC_ARG_WITH([protobuf-c-libdir],
 AC_ARG_ENABLE([debug],
  [AS_HELP_STRING([--enable-debug], [Enable debug print messages. This is a debugging feature which should not be usually enabled])],
  [DEBUG_CFLAGS="-DGPUSOCK_DEBUG"])
-
 AC_SUBST(DEBUG_CFLAGS)
+
+AC_ARG_ENABLE([timers],
+ [AS_HELP_STRING([--enable-timers], [Enable performance timers])],
+ [timers=yes])
+
+AS_IF([test "x$timers" == xyes],
+	  [AC_CHECK_LIB([rt], [clock_gettime],
+					[AC_SUBST([TIMERS_LIBS], ["-lrt"])
+					 AC_SUBST([TIMERS_CFLAGS], ["-DTIMERS_ENABLED"])
+					])
+	  ])
 
 #AX_LIB_PROTOBUF_C([0.14])
 
@@ -34,6 +44,9 @@ AC_ARG_WITH([protoc-c],
     [PROTOC_C="$withval"],
     [PROTOC_C='protoc-c'])
 AC_SUBST([PROTOC_C])
+
+AC_CHECK_LIB(pthread, pthread_create, [PTHREAD_LIBS+=-lpthread])
+AC_SUBST([PTHREAD_LIBS])
 
 AC_PROG_CXX
 

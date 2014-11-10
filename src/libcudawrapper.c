@@ -13,7 +13,6 @@
 #include "common.pb-c.h"
 #include "client.h"
 
-
 //TODO: assert stored results' size fits...
 
 static params c_params;

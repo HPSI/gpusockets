@@ -14,6 +14,7 @@
 #include "common.pb-c.h"
 #include "protocol.h"
 #include "process.h"
+#include "timer.h"
 
 int init_client(const char *s_ip, const char *s_port, struct addrinfo *s_addr) {
 	int socket_fd, ret;
@@ -100,6 +101,9 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 	void *buffer=NULL, *payload=NULL, *dec_msg=NULL;
 	int res_code;
 
+	gs_timer tm;
+	TIMER_RESET(&tm);
+	TIMER_START(&tm);
 	gdprintf("Waiting for response:\n");
 	msg_length = receive_message(&buffer, sock_fd);
 	if (msg_length > 0) {
@@ -130,6 +134,9 @@ int64_t get_cuda_cmd_result(void **result, int sock_fd) {
 
 	if (buffer != NULL)
 		free(buffer);
+
+	TIMER_STOP(&tm);
+	gdprintf("\nClient Receive: %lf\n", TIMER_TO_SEC(TIMER_TOTAL(&tm)));
 
 	return res_code;
 }
@@ -173,6 +180,10 @@ int send_cuda_cmd(int sock_fd, var **args, size_t arg_count, int type) {
 	void *buffer = NULL, *payload = NULL;
 	size_t buf_size;
 
+	gs_timer tm;
+	TIMER_RESET(&tm);
+	TIMER_START(&tm);
+
 	gdprintf("Sendind CUDA cmd...\n");
 	pack_cuda_cmd(&payload, args, arg_count, type);
 
@@ -183,6 +194,9 @@ int send_cuda_cmd(int sock_fd, var **args, size_t arg_count, int type) {
 	send_message(sock_fd, buffer, buf_size);
 
 	free(buffer);
+
+	TIMER_STOP(&tm);
+	gdprintf("\nClient Send: %lf\n", TIMER_TO_SEC(TIMER_TOTAL(&tm)));
 
 	return 0;
 }

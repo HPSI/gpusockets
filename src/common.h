@@ -2,7 +2,6 @@
 #define COMMON_H
 
 #include <stdint.h>
-#include "timers.h"
 /*
 typedef struct cuda_cmd_s {
 	uint16_t type;
