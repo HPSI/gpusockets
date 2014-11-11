@@ -24,7 +24,7 @@ void *connection_handler(void *socket_desc) {
 	void *msg=NULL, *payload=NULL, *result=NULL, *dec_msg=NULL;
 	client_node *client_handle=NULL;
 	uint32_t msg_length;
-	gs_timer mt, rt, dt, pt;
+	gs_timer mt, rt, dt, pt, st, st1, st2, st3;
 
 	pl_rd1a = 0;
 	pl_rd2a = 0;
@@ -32,6 +32,10 @@ void *connection_handler(void *socket_desc) {
 	TIMER_RESET(&rt);
 	TIMER_RESET(&dt);
 	TIMER_RESET(&pt);
+	TIMER_RESET(&st);
+	TIMER_RESET(&st1);
+	TIMER_RESET(&st2);
+	TIMER_RESET(&st3);
 	TIMER_RESET(&pl_rds);
 	TIMER_RESET(&pl_rdm);
 	TIMER_RESET(&pl_rd1);
@@ -107,13 +111,19 @@ void *connection_handler(void *socket_desc) {
 			payload = NULL;
 		}
 		TIMER_STOP(&pt);
-
+		TIMER_START(&st);
 		if (resp_type != -1) {
 			gdprintf("Sending result\n");
+			TIMER_START(&st1);
 			pack_cuda_cmd(&payload, result, arg_cnt,
 				      CUDA_CMD_RESULT);
+			TIMER_STOP(&st1);
+			TIMER_START(&st2);
 			msg_length = encode_message(&msg, resp_type, payload);
+			TIMER_STOP(&st2);
+			TIMER_START(&st3);
 			send_message(client_sock_fd, msg, msg_length);
+			TIMER_STOP(&st3);
 
 			if (result != NULL) {
 				// should be more freeing here...
@@ -121,7 +131,7 @@ void *connection_handler(void *socket_desc) {
 				result = NULL;
 			}
 		}
-
+		TIMER_STOP(&st);
 		gdprintf(">>\nMessage processed, cleaning up...\n<<\n");
 
 		if (msg != NULL) {
@@ -144,12 +154,14 @@ void *connection_handler(void *socket_desc) {
 
 	printf("Message average elapsed time (usec):\n- total: %lf\n"
 		   "- receive: %lf\n- decode: %lf\n"
-		   "- process: %lf\n- send: %lf\n",
+		   "- process: %lf\n- send:\n  |- total: %lf\n  |- pack:% lf\n"
+		   "  |- encode: %lf\n  |- actual: %lf\n",
 			TIMER_TO_USEC(TIMER_AVG(&mt)), TIMER_TO_USEC(TIMER_AVG(&rt)),
 			TIMER_TO_USEC(TIMER_AVG(&dt)), TIMER_TO_USEC(TIMER_AVG(&pt)),
-			TIMER_TO_USEC((TIMER_TOTAL(&mt) - TIMER_TOTAL(&rt)
-				- TIMER_TOTAL(&dt) - TIMER_TOTAL(&pt))
-				/ (double) TIMER_COUNT(&mt)));
+			TIMER_TO_USEC(TIMER_AVG(&st)),
+			TIMER_TO_USEC(TIMER_AVG(&st1)),
+			TIMER_TO_USEC(TIMER_AVG(&st2)),
+			TIMER_TO_USEC(TIMER_AVG(&st3)));
 
 	printf("\nReceive average elapsed time (usec):\n- malloc: %lf\n"
 		   "- read size: %lf\n  |read socket:\n  |- total: %lf\n"
