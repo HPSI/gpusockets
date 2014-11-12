@@ -460,14 +460,14 @@ int get_device_count_for_client(uint64_t *host_count) {
 
 int get_device_name_for_client(void **host_name_ptr, size_t *host_name_size, int name_size, uintptr_t dev_ptr) {
 	CUresult res;
-	CUdevice *cuda_device = (CUdevice *) dev_ptr;
+	cuda_device_node *dev_node = (cuda_device_node *) dev_ptr;
 
-	gdprintf("Getting name of CUDA device @%p...\n", cuda_device);
+	gdprintf("Getting name of CUDA device @%p...\n", dev_node->cuda_device);
 
 	*host_name_size = name_size;
 	*host_name_ptr = malloc_safe(name_size);
 
-	res = cuda_err_print(cuDeviceGetName(*host_name_ptr, name_size, *cuda_device), 0);
+	res = cuda_err_print(cuDeviceGetName(*host_name_ptr, name_size, *(dev_node->cuda_device)), 0);
 
 	return res;
 }
